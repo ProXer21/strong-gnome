@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="FitnessTrainer" />
+  <meta name="theme-color" content="#b5338a" />
+  <title>Mein Fitness-Trainer</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase-config.js"></script>
+</head>
+<body>
+
+<!-- ─── Toast ─────────────────────────────────────────────────────────── -->
+<div id="toast" class="toast"></div>
+
+<!-- ─── Alternative Modal ─────────────────────────────────────────────── -->
+<div id="alt-modal" class="modal-overlay" onclick="if(event.target===this)closeAltModal()">
+  <div class="modal">
+    <h3>Übung nicht machbar?</h3>
+    <p>Wähle eine Alternative für <strong id="alt-ex-name"></strong> oder überspringe sie komplett.</p>
+    <div class="alt-options" id="alt-options"></div>
+    <button class="btn-skip-all" onclick="skipExercise()">Übung komplett auslassen</button>
+  </div>
+</div>
+
+<!-- ─── Dashboard ─────────────────────────────────────────────────────── -->
+<section id="page-dashboard" class="page active">
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div>
+      <h1>Hallo! 👋</h1>
+      <p id="weekly-target">Lade…</p>
+    </div>
+    <span id="sync-status" title="Cloud-Sync" style="font-size:22px;cursor:default"></span>
+  </div>
+
+  <!-- Weight progress -->
+  <div class="card">
+    <div class="card-title">Gewichtsfortschritt</div>
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <h2><span id="current-weight">82.0</span> <span>kg</span></h2>
+      <span style="font-size:14px;color:#b5338a;font-weight:700" id="weight-lost"></span>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+    </div>
+    <div class="progress-label">
+      <span id="progress-start">82 kg</span>
+      <span id="progress-pct" style="color:#b5338a;font-weight:700">0%</span>
+      <span id="progress-goal">70 kg</span>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value" id="weeks-left">—</div>
+      <div class="stat-label">Wochen bis Ziel</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">70</div>
+      <div class="stat-label">Zielgewicht (kg)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">Sep</div>
+      <div class="stat-label">Zielmonat</div>
+    </div>
+  </div>
+
+  <!-- Measurements -->
+  <div class="measure-row">
+    <div class="measure-card">
+      <div class="m-icon">🍑</div>
+      <div class="m-label">Hüfte / Po</div>
+      <div class="m-value" id="hip-value">—</div>
+      <div class="m-delta" id="hip-delta"></div>
+    </div>
+    <div class="measure-card">
+      <div class="m-icon">👗</div>
+      <div class="m-label">Taille</div>
+      <div class="m-value" id="waist-value">—</div>
+      <div class="m-delta" id="waist-delta"></div>
+    </div>
+    <div class="measure-card">
+      <div class="m-icon">💪</div>
+      <div class="m-label">Oberarm</div>
+      <div class="m-value" id="arm-value">—</div>
+      <div class="m-delta" id="arm-delta"></div>
+    </div>
+    <div class="measure-card" onclick="navigate('checkin')" style="cursor:pointer;border:2px dashed #e0d0db;box-shadow:none;">
+      <div class="m-icon">➕</div>
+      <div class="m-label" style="color:#b5338a;font-weight:700">Einchecken</div>
+      <div class="m-value" style="font-size:13px;color:#6b6b6b">Werte eintragen</div>
+    </div>
+  </div>
+
+  <!-- Next workout -->
+  <div class="next-workout">
+    <div class="nw-label">Nächstes Training</div>
+    <h3 id="nw-title">Tag A — Glutes & Beine I</h3>
+    <div class="nw-exercises" id="nw-exercises"></div>
+  </div>
+
+  <button class="save-workout-btn" onclick="navigate('training')" style="background:linear-gradient(135deg,#7b1f60,#b5338a)">
+    Training starten →
+  </button>
+</section>
+
+<!-- ─── Training ──────────────────────────────────────────────────────── -->
+<section id="page-training" class="page">
+  <div class="page-header">
+    <h1>Training 💪</h1>
+    <p id="day-info">Wähle einen Tag</p>
+  </div>
+
+  <div class="day-selector">
+    <button class="day-btn" data-day="A">
+      <div class="day-letter">A</div>
+      <div class="day-label">Glutes I</div>
+    </button>
+    <button class="day-btn" data-day="B">
+      <div class="day-letter">B</div>
+      <div class="day-label">Rücken</div>
+    </button>
+    <button class="day-btn" data-day="C">
+      <div class="day-letter">C</div>
+      <div class="day-label">Glutes II</div>
+    </button>
+    <button class="day-btn" data-day="D">
+      <div class="day-letter">D</div>
+      <div class="day-label">Cardio</div>
+    </button>
+  </div>
+
+  <div id="exercise-list"></div>
+
+  <button class="save-workout-btn" onclick="saveWorkout()">Training abschließen & speichern</button>
+</section>
+
+<!-- ─── Check-in ──────────────────────────────────────────────────────── -->
+<section id="page-checkin" class="page">
+  <div class="page-header">
+    <h1>Einchecken ✅</h1>
+    <p>Deine Werte eintragen</p>
+  </div>
+
+  <div class="info-box">
+    📅 <strong>Gewicht:</strong> Jeden Montag morgens, nüchtern, vor dem Frühstück.<br>
+    📏 <strong>Maße:</strong> 1x pro Monat mit Maßband — immer an der gleichen Stelle.
+  </div>
+
+  <div class="checkin-section">
+    <h2>⚖️ Gewicht (wöchentlich)</h2>
+    <div class="input-row">
+      <div class="input-field">
+        <label>Aktuelles Gewicht</label>
+        <input type="number" id="ci-weight" inputmode="decimal" step="0.1" min="40" max="200" placeholder="82.0" />
+        <span class="unit">kg</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="checkin-section">
+    <h2>📏 Körpermaße (monatlich)</h2>
+    <div class="input-row">
+      <div class="input-field">
+        <label>🍑 Hüfte / Po (breiteste Stelle)</label>
+        <input type="number" id="ci-hip" inputmode="decimal" step="0.5" min="50" max="200" placeholder="—" />
+        <span class="unit">cm</span>
+      </div>
+      <div class="input-field">
+        <label>👗 Taille (schmalste Stelle)</label>
+        <input type="number" id="ci-waist" inputmode="decimal" step="0.5" min="40" max="200" placeholder="—" />
+        <span class="unit">cm</span>
+      </div>
+      <div class="input-field">
+        <label>💪 Oberarm (entspannt, Mitte)</label>
+        <input type="number" id="ci-arm" inputmode="decimal" step="0.5" min="15" max="80" placeholder="—" />
+        <span class="unit">cm</span>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-save-checkin" onclick="saveCheckin()">Werte speichern</button>
+
+  <div style="margin-top:24px">
+    <div class="setup-card">
+      <h3>📤 Daten exportieren</h3>
+      <p>Exportiere deine Daten als JSON-Datei für das adaptive Analyse-Script oder zur Sicherung.</p>
+      <button class="btn-secondary" onclick="exportData()">Als JSON exportieren</button>
+    </div>
+    <div class="setup-card">
+      <h3>📥 Daten importieren</h3>
+      <p>Lade eine gespeicherte JSON-Datei wieder ein (z.B. nach Gerätewechsel).</p>
+      <button class="btn-secondary" onclick="document.getElementById('import-file').click()">JSON importieren</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this.files[0])" />
+    </div>
+  </div>
+</section>
+
+<!-- ─── Statistiken ───────────────────────────────────────────────────── -->
+<section id="page-stats" class="page">
+  <div class="page-header">
+    <h1>Statistiken 📊</h1>
+    <p>Dein Fortschritt auf einen Blick</p>
+  </div>
+
+  <div class="chart-selector">
+    <button class="chart-btn active" data-chart="weight">Gewicht</button>
+    <button class="chart-btn" data-chart="measures">Maße</button>
+    <button class="chart-btn" data-chart="strength">Kraft</button>
+    <button class="chart-btn" data-chart="heatmap">Konsistenz</button>
+    <button class="chart-btn" data-chart="volume">Volumen</button>
+    <button class="chart-btn" data-chart="month">Monatscheck</button>
+  </div>
+
+  <!-- Weight chart -->
+  <div id="chart-weight" class="chart-view">
+    <div class="chart-container">
+      <h3>⚖️ Gewichtsverlauf vs. Zielkurve</h3>
+      <canvas id="canvas-weight" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Measures chart -->
+  <div id="chart-measures" class="chart-view" style="display:none">
+    <div class="chart-container">
+      <h3>📏 Körpermaße im Verlauf</h3>
+      <canvas id="canvas-measures" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Strength chart -->
+  <div id="chart-strength" class="chart-view" style="display:none">
+    <div class="chart-container">
+      <h3>💪 Kraftentwicklung</h3>
+      <div class="exercise-picker">
+        <label>Übung:</label>
+        <select id="ex-picker"></select>
+      </div>
+      <canvas id="canvas-strength" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Heatmap -->
+  <div id="chart-heatmap" class="chart-view" style="display:none">
+    <div class="chart-container">
+      <h3>🔥 Trainings-Konsistenz</h3>
+      <p style="font-size:12px;color:#6b6b6b;margin-bottom:12px">Lila = Trainingstag</p>
+      <div class="heatmap" id="heatmap-grid"></div>
+    </div>
+  </div>
+
+  <!-- Volume chart -->
+  <div id="chart-volume" class="chart-view" style="display:none">
+    <div class="chart-container">
+      <h3>📈 Wöchentliches Trainingsvolumen</h3>
+      <canvas id="canvas-volume" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Month summary -->
+  <div id="chart-month" class="chart-view" style="display:none">
+    <div class="chart-container mb-0">
+      <h3>🗓️ Monatscheck — Wie lief es?</h3>
+      <p style="font-size:12px;color:#6b6b6b;margin-bottom:14px">🟢 = Ziel erreicht · 🟡 = Nah dran · 🔴 = Anpassen</p>
+      <div class="month-summary" id="month-summary-grid">
+        <div class="empty-state" style="grid-column:1/-1">
+          <div class="es-icon">📊</div>
+          <p>Noch zu wenig Daten für diesen Monat</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Navigation ────────────────────────────────────────────────────── -->
+<nav>
+  <button class="nav-btn active" data-page="dashboard">
+    <span class="icon">🏠</span>
+    <span>Start</span>
+  </button>
+  <button class="nav-btn" data-page="training">
+    <span class="icon">💪</span>
+    <span>Training</span>
+  </button>
+  <button class="nav-btn" data-page="checkin">
+    <span class="icon">✅</span>
+    <span>Einchecken</span>
+  </button>
+  <button class="nav-btn" data-page="stats">
+    <span class="icon">📊</span>
+    <span>Statistiken</span>
+  </button>
+</nav>
+
+<script src="./app.js?v=2"></script>
+</body>
+</html>
