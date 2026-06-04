@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v33';
+const APP_VERSION = 'v34';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
