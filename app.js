@@ -1,12 +1,13 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v32';
+const APP_VERSION = 'v33';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
-// Celinas ursprüngliche Werte — nur noch Fallback + Migration ihres Altbestands
-const LEGACY = { name: 'Celina', startDate: '2026-06-02', goalDate: '2026-09-30', startWeight: 82, goalWeight: 70 };
+// Neutrale Fallback-Werte (nur falls ein Profil fehlt — normal setzt das Onboarding alles).
+// Bewusst KEIN echter Name mehr, damit nie fremde Daten/Namen auftauchen.
+const LEGACY = { name: 'Athlet:in', startDate: '2026-01-01', goalDate: '2026-12-31', startWeight: 80, goalWeight: 75 };
 
 // aktueller eingeloggter Nutzer (Firebase-UID) — bestimmt den Speicher-Key
 let currentUid = null;
@@ -1390,6 +1391,22 @@ function saveProfile() {
   showToast('✓ Profil gespeichert!');
 }
 
+// Konto-Daten zurücksetzen (z. B. um fälschlich übernommene Alt-Daten zu entfernen)
+function resetAccountData() {
+  if (!confirm('Alle Daten dieses Kontos löschen und neu einrichten?\n(Trainings, Gewicht, Maße, Pläne — Freunde bleiben erhalten.)')) return;
+  const cur = loadData();
+  const blank = {
+    weightLog: [], measurements: [], workouts: [], routines: [],
+    settings: { theme: cur.settings.theme, femMode: cur.settings.femMode, restDefault: 90, weightFreq: 'weekly', measureFreq: 'monthly' },
+  };
+  localStorage.setItem(storageKey(), JSON.stringify(blank));
+  const data = loadData();   // sät Standard-Plan (PPL) neu, ohne Profil
+  saveData(data);            // überschreibt auch das Cloud-Dokument
+  syncPublicProfile();
+  showToast('Konto zurückgesetzt — bitte neu einrichten');
+  showOnboarding();
+}
+
 function copyFriendCode() {
   const code = document.getElementById('pf-friendcode').textContent;
   const done = () => showToast('✓ Code kopiert: ' + code, '#0f9d72');
@@ -1596,9 +1613,10 @@ function attachUserDoc(user) {
   window._fbRef.get().then(snap => {
     if (snap.exists && cloudValid(snap.data())) {
       localStorage.setItem(storageKey(), JSON.stringify(snap.data()));
-    } else {
-      maybeMigrateLegacy();
     }
+    // Kein Auto-Import von Alt-Daten mehr — neue Konten starten leer (→ Onboarding).
+    // (Früher migrierte maybeMigrateLegacy() lokale Einzelnutzer-Daten ins erste Konto;
+    //  das übernahm fälschlich Celinas Daten in JEDES neue Konto auf demselben Gerät.)
     setSyncStatus('ok');
     startUserListener();
     syncPublicProfile();        // öffentliches Profil aktuell halten
@@ -1622,20 +1640,6 @@ function startUserListener() {
     } catch (e) {}
     setSyncStatus('ok');
   }, () => setSyncStatus('error'));
-}
-
-// Celinas Altbestand (Key 'fitnessData' ohne uid) genau einmal ins erste Konto übernehmen
-function maybeMigrateLegacy() {
-  if (localStorage.getItem('legacyMigrated')) return;
-  let legacy = null;
-  try { legacy = JSON.parse(localStorage.getItem('fitnessData') || 'null'); } catch (e) {}
-  const has = legacy && ((legacy.weightLog && legacy.weightLog.length) || (legacy.workouts && legacy.workouts.length) || (legacy.routines && legacy.routines.length));
-  if (!has) return;
-  if (!legacy.profile) legacy.profile = { ...LEGACY };
-  localStorage.setItem(storageKey(), JSON.stringify(legacy));
-  localStorage.setItem('legacyMigrated', '1');
-  if (window._fbRef) window._fbRef.set(legacy).catch(() => {});
-  showToast('Deine bisherigen Daten wurden übernommen 💜', '#c42e86');
 }
 
 // ─── Social: Freunde & Plan-Teilen ───────────────────────────────────────────
@@ -2139,7 +2143,9 @@ function enterApp() {
 function routeAfterAuth() {
   const data = loadData();
   const hasData = (data.weightLog && data.weightLog.length) || (data.workouts && data.workouts.length) || (data.measurements && data.measurements.length);
-  if (!data.profile && !hasData) { showOnboarding(); return; }
+  // „Eingerichtet" = echtes Profil mit Name + Startgewicht (nicht nur ein friendCode-Objekt)
+  const onboarded = !!(data.profile && data.profile.name && data.profile.startWeight);
+  if (!onboarded && !hasData) { showOnboarding(); return; }
   enterApp();
 }
 
