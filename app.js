@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v36';
+const APP_VERSION = 'v37';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -1726,7 +1726,7 @@ function attachUserDoc(user) {
     }
     // Kein Auto-Import von Alt-Daten mehr — neue Konten starten leer (→ Onboarding).
     // (Früher migrierte maybeMigrateLegacy() lokale Einzelnutzer-Daten ins erste Konto;
-    //  das übernahm fälschlich Celinas Daten in JEDES neue Konto auf demselben Gerät.)
+    //  das übernahm fälschlich Alt-Daten in JEDES neue Konto auf demselben Gerät.)
     setSyncStatus('ok');
     startUserListener();
     syncPublicProfile();        // öffentliches Profil aktuell halten
