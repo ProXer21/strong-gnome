@@ -1,10 +1,13 @@
-const CACHE_NAME = 'fitness-trainer-v10';
+const CACHE_NAME = 'fitness-trainer-v11';
 const ASSETS = [
   './',
   './index.html',
   './style.css?v=10',
   './app.js?v=10',
   './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  './apple-touch-icon.png',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
 ];
 
