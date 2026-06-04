@@ -17,9 +17,12 @@
     /* Theme vor dem Paint setzen — kein Flackern */
     (function () {
       try {
-        var d = JSON.parse(localStorage.getItem('fitnessData') || '{}');
-        var t = (d.settings && d.settings.theme) ||
-                (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        var t = localStorage.getItem('themePref');
+        if (['light','dark','masc'].indexOf(t) < 0) {
+          var d = JSON.parse(localStorage.getItem('fitnessData') || '{}');
+          t = (d.settings && d.settings.theme) ||
+              (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        }
         document.documentElement.setAttribute('data-theme', t);
         var m = document.querySelector('meta[name="theme-color"]');
         if (m) m.setAttribute('content', t === 'masc' ? '#07090d' : t === 'dark' ? '#16121b' : '#fdf6fb');
@@ -522,6 +525,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=26"></script>
+<script src="./app.js?v=27"></script>
 </body>
 </html>

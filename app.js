@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v26';
+const APP_VERSION = 'v27';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -289,6 +289,9 @@ const ICON_BOLT  = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 
 const ICON_SPARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>';
 
 function applyTheme(theme) {
+  // nutzerunabhängig merken → beim Reload sofort korrektes Theme (kein Flackern,
+  // auch bevor Firebase die uid-Daten geladen hat)
+  try { localStorage.setItem('themePref', theme); } catch (e) {}
   document.documentElement.setAttribute('data-theme', theme);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', theme === 'masc' ? '#07090d' : theme === 'dark' ? '#16121b' : '#fdf6fb');
@@ -1554,6 +1557,8 @@ function refreshDesignPick() {
 }
 function enterApp() {
   setAppState('app');
+  // Theme des eingeloggten Nutzers anwenden (uid-Daten sind jetzt geladen)
+  applyTheme(loadData().settings.theme);
   const u = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
   const ae = document.getElementById('account-email');
   if (ae) ae.textContent = u ? u.email : 'lokaler Modus';
@@ -1669,7 +1674,8 @@ function saveOnboarding() {
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-  applyTheme(loadData().settings.theme);
+  const pref = localStorage.getItem('themePref');
+  applyTheme(['light', 'dark', 'masc'].includes(pref) ? pref : loadData().settings.theme);
 
   if ('serviceWorker' in navigator) {
     const hadController = !!navigator.serviceWorker.controller;
