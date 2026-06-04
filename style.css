@@ -1208,7 +1208,10 @@ canvas { max-width: 100%; }
   display: none;
   align-items: center; justify-content: center;
   padding: 24px;
-  background: var(--grad-primary);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(232,75,160,.32), transparent 56%),
+    radial-gradient(circle at 50% 90%, rgba(120,180,255,.16), transparent 55%),
+    #0b0610;
 }
 .intro-overlay::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -1230,50 +1233,40 @@ canvas { max-width: 100%; }
 .intro-label { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; opacity: .85; }
 .intro-card h2 { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 10px; }
 .intro-meta { font-size: 14px; font-weight: 600; opacity: .9; margin-bottom: 32px; }
+/* ─── Electric-Border-Button (Blitz um den Rand) ──────────────────────── */
+.elec-wrap { position: relative; width: 100%; }
 .intro-go {
-  position: relative;
-  overflow: hidden;
-  width: 100%; padding: 19px; border: none; border-radius: 99px;
+  position: relative; z-index: 1;
+  width: 100%; padding: 19px; border: none; border-radius: 999px;
   background: #fff; color: var(--primary-dark);
   font-family: inherit; font-size: 19px; font-weight: 800; cursor: pointer;
-  box-shadow: 0 10px 30px rgba(0,0,0,.25);
-  animation:
-    introPulse 1.8s ease-in-out .6s infinite,
-    introCharge 2.4s ease-in-out .6s infinite;
-}
-.intro-go > * { position: relative; z-index: 2; }
-/* Blitz-Streifen, der über den Button zuckt */
-.intro-go::before {
-  content: '';
-  position: absolute; top: -60%; left: -80%;
-  width: 60%; height: 220%;
-  background: linear-gradient(115deg,
-    transparent 28%,
-    rgba(232,75,160,.55) 44%,
-    rgba(232,75,160,.85) 49%,
-    rgba(255,255,255,.95) 50%,
-    rgba(232,75,160,.85) 51%,
-    rgba(232,75,160,.55) 56%,
-    transparent 72%);
-  transform: skewX(-22deg);
-  z-index: 1;
-  pointer-events: none;
-  animation: introShine 2.4s ease-in-out .6s infinite;
+  box-shadow: 0 0 26px rgba(232,75,160,.5), 0 10px 30px rgba(0,0,0,.35);
+  animation: introPulse 2s ease-in-out infinite;
 }
 .intro-go:active { transform: scale(.97); }
-@keyframes introPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.03); }
+@keyframes introPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+
+/* zackige Blitz-Linien, die um den Button-Rand zucken */
+.elec-border {
+  position: absolute; inset: 0; border-radius: 999px;
+  border: 1.8px solid #ffffff;
+  pointer-events: none; z-index: 2;
+  filter: url(#electric)
+          drop-shadow(0 0 3px #ff5fb0)
+          drop-shadow(0 0 9px rgba(255,79,163,.9))
+          drop-shadow(0 0 18px rgba(120,180,255,.85));
 }
-@keyframes introCharge {
-  0%, 44%, 60%, 100% { box-shadow: 0 10px 30px rgba(0,0,0,.25); }
-  52% { box-shadow: 0 0 0 3px rgba(255,255,255,.95), 0 0 46px 8px rgba(232,75,160,.95), 0 10px 30px rgba(0,0,0,.25); }
+/* zweite Lage, andere Phase + bläulich für mehrfarbigen Lichtbogen */
+.elec-border.elec-2 {
+  border-color: #aee0ff;
+  z-index: 3;
+  filter: url(#electric)
+          drop-shadow(0 0 4px #5bd0ff)
+          drop-shadow(0 0 16px rgba(232,75,160,.75));
+  animation: elecFlicker 1.5s steps(1) infinite;
+  opacity: .9;
 }
-@keyframes introShine {
-  0% { left: -80%; }
-  42% { left: 170%; }
-  100% { left: 170%; }
-}
+@keyframes elecFlicker { 0%,100%{opacity:.95} 50%{opacity:.55} }
 .intro-cancel {
   margin-top: 16px; border: none; background: transparent; color: #fff;
   font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;

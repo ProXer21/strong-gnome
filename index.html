@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=12" />
+  <link rel="stylesheet" href="./style.css?v=13" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -40,6 +40,18 @@
 
 <!-- ─── Toast ─────────────────────────────────────────────────────────── -->
 <div id="toast" class="toast"></div>
+
+<!-- ─── Electric-Border SVG-Filter (Blitz um den Button) ───────────────── -->
+<svg class="elec-defs" aria-hidden="true" focusable="false" width="0" height="0">
+  <defs>
+    <filter id="electric" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011 0.055" numOctaves="2" seed="1" result="noise">
+        <animate attributeName="seed" dur="0.45s" values="1;4;7;10;13;16;19" repeatCount="indefinite" calcMode="discrete" />
+      </feTurbulence>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="26" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </defs>
+</svg>
 
 <!-- ─── Alternative Modal ─────────────────────────────────────────────── -->
 <div id="alt-modal" class="modal-overlay" onclick="if(event.target===this)closeAltModal()">
@@ -117,7 +129,11 @@
     <div class="intro-label">Bereit für</div>
     <h2 id="intro-name">Trainingsplan</h2>
     <div class="intro-meta" id="intro-meta">5 Übungen</div>
-    <button class="intro-go" onclick="beginWorkout()">Los geht's 💪</button>
+    <div class="elec-wrap">
+      <span class="elec-border" aria-hidden="true"></span>
+      <span class="elec-border elec-2" aria-hidden="true"></span>
+      <button class="intro-go" onclick="beginWorkout()">Los geht's 💪</button>
+    </div>
     <button class="intro-cancel" onclick="cancelIntro()">Zurück</button>
   </div>
 </div>
@@ -443,6 +459,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=15"></script>
+<script src="./app.js?v=16"></script>
 </body>
 </html>
