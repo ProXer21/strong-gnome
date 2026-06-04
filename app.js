@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v24';
+const APP_VERSION = 'v25';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -118,8 +118,11 @@ function loadData() {
   if (!Array.isArray(d.measurements)) d.measurements = [];
   if (!Array.isArray(d.workouts))     d.workouts = [];
   if (!d.settings || typeof d.settings !== 'object') d.settings = {};
-  if (d.settings.theme !== 'dark' && d.settings.theme !== 'light') {
+  if (!['dark', 'light', 'masc'].includes(d.settings.theme)) {
     d.settings.theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  if (d.settings.femMode !== 'dark' && d.settings.femMode !== 'light') {
+    d.settings.femMode = d.settings.theme === 'masc' ? 'light' : d.settings.theme;
   }
   if (typeof d.settings.restDefault !== 'number') d.settings.restDefault = 90;
   if (!FREQ_LABELS[d.settings.weightFreq])  d.settings.weightFreq  = 'weekly';
@@ -279,19 +282,50 @@ function escapeHtml(s) {
 
 // ─── Theme (Hell / Dunkel) ────────────────────────────────────────────────────
 
+const ICON_SUN  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>';
+// Skin-Umschalter: Blitz = „in den maskulinen Modus", Blüte/Funke = „zurück feminin"
+const ICON_BOLT  = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4.5 13.5H11l-1 8.5L19.5 10H13l0-8z"/></svg>';
+const ICON_SPARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>';
+
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', theme === 'dark' ? '#16121b' : '#fdf6fb');
+  if (meta) meta.setAttribute('content', theme === 'masc' ? '#07090d' : theme === 'dark' ? '#16121b' : '#fdf6fb');
+
+  const masc = theme === 'masc';
+  // Sonne/Mond: nur im femininen Modus sinnvoll (maskulin ist immer dunkel)
   const btn = document.getElementById('theme-toggle');
-  if (btn) btn.innerHTML = theme === 'dark'
-    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
-    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>';
+  if (btn) {
+    btn.style.display = masc ? 'none' : '';
+    btn.innerHTML = theme === 'dark' ? ICON_SUN : ICON_MOON;
+  }
+  // Stil-Umschalter feminin ↔ maskulin
+  const skin = document.getElementById('skin-toggle');
+  if (skin) {
+    skin.innerHTML = masc ? ICON_SPARK : ICON_BOLT;
+    skin.setAttribute('aria-label', masc ? 'Femininen Stil aktivieren' : 'Maskulinen Stil aktivieren');
+  }
 }
 
 function toggleTheme() {
   const data = loadData();
+  if (data.settings.theme === 'masc') return;           // im maskulinen Modus deaktiviert
   data.settings.theme = data.settings.theme === 'dark' ? 'light' : 'dark';
+  data.settings.femMode = data.settings.theme;
+  saveData(data);
+  applyTheme(data.settings.theme);
+}
+
+// feminin ↔ maskulin umschalten (merkt sich den letzten femininen Modus)
+function toggleSkin() {
+  const data = loadData();
+  if (data.settings.theme === 'masc') {
+    data.settings.theme = data.settings.femMode || 'light';
+  } else {
+    data.settings.femMode = data.settings.theme;
+    data.settings.theme = 'masc';
+  }
   saveData(data);
   applyTheme(data.settings.theme);
 }
@@ -379,7 +413,7 @@ function renderDashboard() {
   const data    = loadData();
   const sw = pStartWeight(data), gw = pGoalWeight(data);
   const current = latestWeight(data);
-  const lost    = +(sw - current).toFixed(1);
+  const lost    = +(sw - current).toFixed(2);
   const total   = (sw - gw) || 1;
   const pct     = Math.min(100, Math.max(0, Math.round((lost / total) * 100)));
   const weeks   = weeksRemaining();
@@ -387,8 +421,8 @@ function renderDashboard() {
   const hi = document.querySelector('#page-dashboard h1');
   if (hi) hi.textContent = `Hallo, ${pName(data)}!`;
 
-  document.getElementById('current-weight').textContent = current.toFixed(1);
-  document.getElementById('weight-lost').textContent    = lost > 0 ? `-${lost} kg` : lost < 0 ? `+${Math.abs(lost)} kg` : '±0';
+  document.getElementById('current-weight').textContent = current.toFixed(2);
+  document.getElementById('weight-lost').textContent    = lost > 0 ? `-${lost.toFixed(2)} kg` : lost < 0 ? `+${Math.abs(lost).toFixed(2)} kg` : '±0';
   document.getElementById('weeks-left').textContent     = weeks;
   document.getElementById('progress-bar').style.width   = pct + '%';
   document.getElementById('progress-pct').textContent   = pct + '%';
@@ -1201,10 +1235,10 @@ function renderCheckin() {
   if (wrap) {
     wrap.innerHTML = MEASURE_FIELDS.map(f => {
       const last = lastMeasure(data, f.key);
-      const hint = last !== null ? `zuletzt ${last} cm` : '';
+      const hint = last !== null ? `zuletzt ${Number(last).toFixed(2)} cm` : '';
       return `<div class="input-field">
         <label>${escapeHtml(f.label)}${hint ? ` <span class="ci-last">${hint}</span>` : ''}</label>
-        <input type="number" id="ci-${f.key}" inputmode="decimal" step="0.5" min="0" max="250" placeholder="—" />
+        <input type="number" id="ci-${f.key}" inputmode="decimal" step="0.01" min="0" max="250" placeholder="—" />
         <span class="unit">cm</span>
       </div>`;
     }).join('');
@@ -1212,7 +1246,7 @@ function renderCheckin() {
 
   // aktuelles Gewicht vorbelegen (Hinweis)
   const wIn = document.getElementById('ci-weight');
-  if (wIn) wIn.placeholder = latestWeight(data).toFixed(1);
+  if (wIn) wIn.placeholder = latestWeight(data).toFixed(2);
 }
 
 function buildFreqSeg(containerId, current, kind) {
@@ -1647,6 +1681,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const tt = document.getElementById('theme-toggle');
   if (tt) tt.addEventListener('click', toggleTheme);
+
+  const st = document.getElementById('skin-toggle');
+  if (st) st.addEventListener('click', toggleSkin);
 
   document.querySelectorAll('.app-version').forEach(el => { el.textContent = `FitnessTrainer · ${APP_VERSION}`; });
 

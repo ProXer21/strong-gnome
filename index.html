@@ -22,7 +22,7 @@
                 (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.setAttribute('data-theme', t);
         var m = document.querySelector('meta[name="theme-color"]');
-        if (m) m.setAttribute('content', t === 'dark' ? '#16121b' : '#fdf6fb');
+        if (m) m.setAttribute('content', t === 'masc' ? '#07090d' : t === 'dark' ? '#16121b' : '#fdf6fb');
       } catch (e) {}
     })();
   </script>
@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=20" />
+  <link rel="stylesheet" href="./style.css?v=21" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -232,6 +232,7 @@
       <p id="weekly-target">Lade…</p>
     </div>
     <div class="header-actions">
+      <button id="skin-toggle" class="icon-btn" aria-label="Maskulinen Stil aktivieren"></button>
       <button id="theme-toggle" class="icon-btn" aria-label="Hell/Dunkel umschalten"></button>
       <span id="sync-status" title="Cloud-Sync"></span>
     </div>
@@ -348,7 +349,7 @@
     <div class="input-row">
       <div class="input-field">
         <label>Aktuelles Gewicht</label>
-        <input type="number" id="ci-weight" inputmode="decimal" step="0.1" min="30" max="250" placeholder="—" />
+        <input type="number" id="ci-weight" inputmode="decimal" step="0.01" min="30" max="250" placeholder="—" />
         <span class="unit">kg</span>
       </div>
     </div>
@@ -505,6 +506,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=24"></script>
+<script src="./app.js?v=25"></script>
 </body>
 </html>
