@@ -8,11 +8,24 @@
   <meta name="apple-mobile-web-app-title" content="FitnessTrainer" />
   <meta name="theme-color" content="#fdf6fb" />
   <title>Mein Fitness-Trainer</title>
+  <script>
+    /* Theme vor dem Paint setzen — kein Flackern */
+    (function () {
+      try {
+        var d = JSON.parse(localStorage.getItem('fitnessData') || '{}');
+        var t = (d.settings && d.settings.theme) ||
+                (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', t);
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.setAttribute('content', t === 'dark' ? '#16121b' : '#fdf6fb');
+      } catch (e) {}
+    })();
+  </script>
   <link rel="manifest" href="./manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=4" />
+  <link rel="stylesheet" href="./style.css?v=5" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -33,6 +46,31 @@
   </div>
 </div>
 
+<!-- ─── Übung hinzufügen Modal ─────────────────────────────────────────── -->
+<div id="ex-modal" class="modal-overlay" onclick="if(event.target===this)closeExModal()">
+  <div class="modal">
+    <h3>Übung hinzufügen</h3>
+    <p>Suche eine bekannte Übung oder gib eine neue ein.</p>
+    <input id="ex-input" class="modal-input" list="ex-datalist" placeholder="z. B. Hip Thrust" autocomplete="off" />
+    <datalist id="ex-datalist"></datalist>
+    <div class="modal-fields">
+      <label>Sätze<input type="number" id="ex-sets" min="1" max="10" value="3" inputmode="numeric"></label>
+      <label>Wdh von<input type="number" id="ex-rmin" min="1" max="50" value="10" inputmode="numeric"></label>
+      <label>bis<input type="number" id="ex-rmax" min="1" max="50" value="12" inputmode="numeric"></label>
+    </div>
+    <button class="save-workout-btn" onclick="confirmAddExercise()">Hinzufügen</button>
+  </div>
+</div>
+
+<!-- ─── Rest-Timer ─────────────────────────────────────────────────────── -->
+<div id="rest-timer" class="rest-timer">
+  <span class="rt-label">Pause</span>
+  <button class="rt-adj" onclick="adjustRest(-15)">−15</button>
+  <span class="rt-time" id="rest-time">1:30</span>
+  <button class="rt-adj" onclick="adjustRest(15)">+15</button>
+  <button class="rt-skip" onclick="skipRest()">Überspringen</button>
+</div>
+
 <!-- ─── Dashboard ─────────────────────────────────────────────────────── -->
 <section id="page-dashboard" class="page active">
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -40,7 +78,10 @@
       <h1>Hallo!</h1>
       <p id="weekly-target">Lade…</p>
     </div>
-    <span id="sync-status" title="Cloud-Sync" style="font-size:20px;cursor:default"></span>
+    <div class="header-actions">
+      <button id="theme-toggle" class="icon-btn" aria-label="Hell/Dunkel umschalten"></button>
+      <span id="sync-status" title="Cloud-Sync"></span>
+    </div>
   </div>
 
   <!-- Weight progress -->
@@ -117,33 +158,44 @@
 
 <!-- ─── Training ──────────────────────────────────────────────────────── -->
 <section id="page-training" class="page">
-  <div class="page-header">
-    <h1>Training</h1>
-    <p id="day-info">Wähle einen Tag</p>
+
+  <!-- Ansicht 1: Routinen-Liste -->
+  <div id="tv-list">
+    <div class="page-header">
+      <h1>Pläne</h1>
+      <p>Wähle eine Routine zum Starten oder Bearbeiten</p>
+    </div>
+    <div id="routine-list"></div>
+    <button class="btn-add-ex" onclick="createRoutine()">+ Neue Routine</button>
   </div>
 
-  <div class="day-selector">
-    <button class="day-btn" data-day="A">
-      <div class="day-letter">A</div>
-      <div class="day-label">Po</div>
-    </button>
-    <button class="day-btn" data-day="B">
-      <div class="day-letter">B</div>
-      <div class="day-label">Brust</div>
-    </button>
-    <button class="day-btn" data-day="C">
-      <div class="day-letter">C</div>
-      <div class="day-label">Rücken</div>
-    </button>
-    <button class="day-btn" data-day="D">
-      <div class="day-letter">D</div>
-      <div class="day-label">Cardio</div>
-    </button>
+  <!-- Ansicht 2: Routine-Editor -->
+  <div id="tv-editor" style="display:none">
+    <div class="editor-bar">
+      <button class="btn-back" onclick="showTrainingView('list')" aria-label="Zurück">‹ Pläne</button>
+      <h2 id="editor-title">Routine</h2>
+      <button class="btn-icon-text" onclick="renameRoutine()" aria-label="Umbenennen">✎</button>
+    </div>
+    <div id="editor-body"></div>
+    <div class="editor-footer">
+      <button class="btn-secondary" onclick="duplicateRoutine()">Duplizieren</button>
+      <button class="btn-danger" onclick="deleteRoutine()">Routine löschen</button>
+    </div>
   </div>
 
-  <div id="exercise-list"></div>
-
-  <button class="save-workout-btn" onclick="saveWorkout()">Training abschließen & speichern</button>
+  <!-- Ansicht 3: Aktives Workout -->
+  <div id="tv-workout" style="display:none">
+    <div class="workout-bar">
+      <button class="btn-back" onclick="cancelWorkout()" aria-label="Abbrechen">✕</button>
+      <div class="wb-center">
+        <div class="wb-title" id="wb-title">Training</div>
+        <div class="wb-timer" id="wb-timer">0:00</div>
+      </div>
+      <button class="wb-finish" onclick="finishWorkout()">Fertig</button>
+    </div>
+    <div id="workout-body"></div>
+    <button class="save-workout-btn" onclick="finishWorkout()">Training abschließen &amp; speichern</button>
+  </div>
 </section>
 
 <!-- ─── Check-in ──────────────────────────────────────────────────────── -->
@@ -311,6 +363,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=4"></script>
+<script src="./app.js?v=5"></script>
 </body>
 </html>
