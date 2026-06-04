@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=7" />
+  <link rel="stylesheet" href="./style.css?v=8" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -104,6 +104,21 @@
   <button class="rt-adj" onclick="adjustRest(15)">+15</button>
   <button class="rt-skip" onclick="skipRest()">Überspringen</button>
 </div>
+
+<!-- ─── Workout-Start (Bereit?) ────────────────────────────────────────── -->
+<div id="workout-intro" class="intro-overlay">
+  <div class="intro-card">
+    <div class="intro-emoji" id="intro-emoji">🍑</div>
+    <div class="intro-label">Bereit für</div>
+    <h2 id="intro-name">Trainingsplan</h2>
+    <div class="intro-meta" id="intro-meta">5 Übungen</div>
+    <button class="intro-go" onclick="beginWorkout()">Los geht's 💪</button>
+    <button class="intro-cancel" onclick="cancelIntro()">Zurück</button>
+  </div>
+</div>
+
+<!-- ─── 3·2·1 Countdown ────────────────────────────────────────────────── -->
+<div id="countdown" class="countdown"><span id="countdown-num">3</span></div>
 
 <!-- ─── Dashboard ─────────────────────────────────────────────────────── -->
 <section id="page-dashboard" class="page active">
@@ -196,13 +211,13 @@
   <!-- Ansicht 1: Routinen-Liste -->
   <div id="tv-list">
     <div class="page-header">
-      <h1>Pläne</h1>
-      <p>Wähle eine Routine zum Starten oder Bearbeiten</p>
+      <h1>Trainingspläne</h1>
+      <p>Wähle einen Trainingsplan zum Starten oder Bearbeiten</p>
     </div>
     <button class="btn-quickstart" onclick="startEmptyWorkout()">⚡ Leeres Workout starten</button>
-    <div class="section-label">Meine Routinen</div>
+    <div class="section-label">Meine Trainingspläne</div>
     <div id="routine-list"></div>
-    <button class="btn-add-ex" onclick="createRoutine()">+ Neue Routine</button>
+    <button class="btn-add-ex" onclick="createRoutine()">+ Neuer Trainingsplan</button>
   </div>
 
   <!-- Ansicht 2: Routine-Editor -->
@@ -414,6 +429,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=7"></script>
+<script src="./app.js?v=8"></script>
 </body>
 </html>

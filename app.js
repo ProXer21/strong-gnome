@@ -367,8 +367,8 @@ function renderDashboard() {
       nwList.appendChild(div);
     });
   } else {
-    document.getElementById('nw-title').textContent = 'Keine Routine';
-    nwList.innerHTML = '<div class="nw-exercise"><span class="ex-name">Lege im Training eine Routine an</span></div>';
+    document.getElementById('nw-title').textContent = 'Kein Trainingsplan';
+    nwList.innerHTML = '<div class="nw-exercise"><span class="ex-name">Lege im Training einen Trainingsplan an</span></div>';
   }
 }
 
@@ -410,7 +410,7 @@ function renderRoutineList() {
   const list = document.getElementById('routine-list');
   list.innerHTML = '';
   if (!data.routines.length) {
-    list.innerHTML = '<div class="empty-state"><div class="es-icon">📋</div><p>Noch keine Routine. Lege deinen ersten Plan an!</p></div>';
+    list.innerHTML = '<div class="empty-state"><div class="es-icon">📋</div><p>Noch kein Trainingsplan. Lege deinen ersten an!</p></div>';
   }
   data.routines.forEach(r => {
     const last = lastTrainedDate(data, r.id);
@@ -435,7 +435,7 @@ function renderRoutineList() {
 }
 
 function createRoutine() {
-  const name = prompt('Name der neuen Routine (z. B. „Oberkörper"):');
+  const name = prompt('Name des neuen Trainingsplans (z. B. „Oberkörper"):');
   if (!name || !name.trim()) return;
   const data = loadData();
   const r = { id: uid('r'), name: name.trim(), emoji: '🏋️', exercises: [] };
@@ -519,7 +519,7 @@ function renameRoutine() {
   const data = loadData();
   const r = getRoutine(data, editorRoutineId);
   if (!r) return;
-  const name = prompt('Routine umbenennen:', r.name);
+  const name = prompt('Trainingsplan umbenennen:', r.name);
   if (name && name.trim()) { r.name = name.trim(); saveData(data); renderPlanEditor(); }
 }
 
@@ -527,10 +527,10 @@ function deleteRoutine() {
   const data = loadData();
   const r = getRoutine(data, editorRoutineId);
   if (!r) return;
-  if (!confirm(`Routine „${r.name}" wirklich löschen?`)) return;
+  if (!confirm(`Trainingsplan „${r.name}" wirklich löschen?`)) return;
   data.routines = data.routines.filter(x => x.id !== editorRoutineId);
   saveData(data);
-  showToast('Routine gelöscht', '#6d5a67');
+  showToast('Trainingsplan gelöscht', '#6d5a67');
   showTrainingView('list');
 }
 
@@ -544,7 +544,7 @@ function duplicateRoutine() {
   copy.exercises.forEach(e => e.id = uid('e'));
   data.routines.push(copy);
   saveData(data);
-  showToast('Routine dupliziert', '#c42e86');
+  showToast('Trainingsplan dupliziert', '#c42e86');
   openEditor(copy.id);
 }
 
@@ -622,12 +622,12 @@ function startWorkout(routineId) {
   const data = loadData();
   const r = getRoutine(data, routineId);
   if (!r) return;
-  if (!r.exercises.length) { showToast('Diese Routine hat noch keine Übungen', '#c46a04'); openEditor(routineId); return; }
+  if (!r.exercises.length) { showToast('Dieser Trainingsplan hat noch keine Übungen', '#c46a04'); openEditor(routineId); return; }
 
   session = {
     routineId: r.id,
     routineName: r.name,
-    startTs: Date.now(),
+    startTs: null,                 // startet erst nach dem Countdown
     exercises: r.exercises.map(ex => {
       const rec = calculateNextWeight(ex.name, data);
       const sets = [];
@@ -642,8 +642,54 @@ function startWorkout(routineId) {
       return { exId: ex.id, name: ex.name, tag: ex.tag, repsMin: ex.repsMin, repsMax: ex.repsMax, restSec: ex.restSec || (data.settings.restDefault || 90), note: '', rpe: 7, skipped: false, alternative: null, sets };
     }),
   };
-  startSessionTimer();
+  showWorkoutIntro(r);
+}
+
+// ── Start-Bildschirm („Bereit?") — gibt dem Trainingsstart Gewicht ──
+function showWorkoutIntro(r) {
+  const totalSets = session.exercises.reduce((a, e) => a + e.sets.length, 0);
+  document.getElementById('intro-emoji').textContent = r.emoji || '🏋️';
+  document.getElementById('intro-name').textContent = r.name;
+  document.getElementById('intro-meta').textContent =
+    `${r.exercises.length} Übungen · ${totalSets} Sätze · ca. ${Math.max(15, Math.round(totalSets * 2.5))} Min`;
+  document.getElementById('workout-intro').classList.add('show');
+}
+
+function cancelIntro() {
+  document.getElementById('workout-intro').classList.remove('show');
+  session = null;
+}
+
+function beginWorkout() {
+  document.getElementById('workout-intro').classList.remove('show');
+  if (!session) return;
+  navigate('training');
   showTrainingView('workout');
+  runCountdown(() => {
+    session.startTs = Date.now();
+    startSessionTimer();
+    try { if (navigator.vibrate) navigator.vibrate([0, 60, 40, 120]); } catch (e) {}
+  });
+}
+
+// 3 · 2 · 1 · Los — kurzer Countdown mit Puls + Vibration (antippen = überspringen)
+function runCountdown(cb) {
+  const el = document.getElementById('countdown');
+  const num = document.getElementById('countdown-num');
+  let n = 3, done = false;
+  const finish = () => { if (done) return; done = true; clearTimeout(window._cdT); el.classList.remove('show'); el.onclick = null; cb(); };
+  el.onclick = finish;
+  el.classList.add('show');
+  const tick = () => {
+    if (done) return;
+    if (n <= 0) { num.textContent = 'Los!'; num.classList.remove('pop'); void num.offsetWidth; num.classList.add('pop'); window._cdT = setTimeout(finish, 500); return; }
+    num.textContent = n;
+    num.classList.remove('pop'); void num.offsetWidth; num.classList.add('pop');
+    try { if (navigator.vibrate) navigator.vibrate(70); } catch (e) {}
+    n--;
+    window._cdT = setTimeout(tick, 720);
+  };
+  tick();
 }
 
 function startSessionTimer() {
