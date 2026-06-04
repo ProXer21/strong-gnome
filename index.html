@@ -33,7 +33,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=27" />
+  <link rel="stylesheet" href="./style.css?v=28" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -572,6 +572,17 @@
   <div class="app-version">FitnessTrainer</div>
 </section>
 
+<!-- ─── Workout-Detail (Verlauf-Karte antippen) ───────────────────────── -->
+<section id="page-workout-detail" class="page">
+  <div class="editor-bar">
+    <button class="btn-back" onclick="navigate('history')" aria-label="Zurück">‹ Verlauf</button>
+    <h2>Training</h2>
+    <button class="hist-del" onclick="deleteWorkoutFromDetail()" aria-label="Löschen">✕</button>
+  </div>
+  <div id="wd-body"></div>
+  <button class="save-workout-btn" onclick="repeatCurrentWorkout()">🔁 Erneut ausführen</button>
+</section>
+
 <!-- ─── Freunde (Social) ──────────────────────────────────────────────── -->
 <section id="page-friends" class="page">
   <div class="editor-bar">
@@ -651,6 +662,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=34"></script>
+<script src="./app.js?v=35"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v34';
+const APP_VERSION = 'v35';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -352,6 +352,7 @@ function navigate(pageId) {
   if (pageId === 'stats')     renderStats();
   if (pageId === 'profile')   renderProfile();
   if (pageId === 'friends')   renderFriends();
+  if (pageId === 'workout-detail') renderWorkoutDetail();
 }
 
 // ─── Verlauf ──────────────────────────────────────────────────────────────────
@@ -378,14 +379,16 @@ function renderHistory() {
     }).join('');
 
     const card = document.createElement('div');
-    card.className = 'card hist-card';
+    card.className = 'card hist-card hist-clickable';
+    card.setAttribute('role', 'button');
+    card.onclick = () => openWorkoutDetail(i);
     card.innerHTML = `
       <div class="hist-head">
         <div>
           <h3>${escapeHtml(w.routineName || 'Training')}</h3>
           <p class="hist-date">${formatDateDE(w.date)}</p>
         </div>
-        <button class="hist-del" onclick="deleteWorkout(${i})" aria-label="Workout löschen">✕</button>
+        <button class="hist-del" onclick="event.stopPropagation(); deleteWorkout(${i})" aria-label="Workout löschen">✕</button>
       </div>
       <div class="hist-exs">${lines}</div>
       <div class="hist-foot">
@@ -413,6 +416,113 @@ function deleteWorkout(index) {
   saveData(data);
   showToast('Workout gelöscht', '#6d5a67');
   renderHistory();
+}
+
+// ── Workout-Detailansicht (Karte antippen) ──
+let detailWorkoutIndex = null;
+
+function openWorkoutDetail(index) { detailWorkoutIndex = index; navigate('workout-detail'); }
+
+// geschätztes 1RM (Epley-Formel)
+function e1rm(weight, reps) {
+  if (!weight || weight <= 0 || !reps) return null;
+  return Math.round(weight * (1 + reps / 30));
+}
+
+// Wie viele Übungen sind in diesem Workout ein neuer Bestwert (Top-Gewicht > alle früheren)?
+function countPRs(index, data) {
+  const w = data.workouts[index];
+  if (!w) return 0;
+  let prs = 0;
+  (w.exercises || []).forEach(ex => {
+    if (ex.skipped || !ex.sets || !ex.sets.length) return;
+    const topNow = Math.max(...ex.sets.map(s => s.weight || 0));
+    if (topNow <= 0) return;
+    let prevBest = 0;
+    for (let j = 0; j < index; j++) {
+      (data.workouts[j].exercises || []).forEach(pe => {
+        if (pe.name === ex.name && !pe.skipped) (pe.sets || []).forEach(s => { if ((s.weight || 0) > prevBest) prevBest = s.weight || 0; });
+      });
+    }
+    if (prevBest > 0 && topNow > prevBest) prs++;
+  });
+  return prs;
+}
+
+function renderWorkoutDetail() {
+  const data = loadData();
+  const w = data.workouts[detailWorkoutIndex];
+  if (!w) { navigate('history'); return; }
+
+  const totalVol = (w.exercises || []).reduce((sum, ex) =>
+    sum + (ex.sets || []).reduce((s2, st) => s2 + (st.weight || 0) * (st.reps || 0), 0), 0);
+  const durTxt = w.durationSec
+    ? (w.durationSec >= 3600 ? `${Math.floor(w.durationSec / 3600)}h ${Math.round((w.durationSec % 3600) / 60)}m` : `${Math.round(w.durationSec / 60)} Min`)
+    : '—';
+  const prs = countPRs(detailWorkoutIndex, data);
+
+  let html = `
+    <div class="wd-head">
+      <h1>${escapeHtml(w.routineName || 'Training')}</h1>
+      <p class="wd-date">${formatDateDE(w.date)}</p>
+      <div class="wd-stats">
+        <div><span class="wd-st-ic">⏱</span> ${durTxt}</div>
+        <div><span class="wd-st-ic">🏋️</span> ${Math.round(totalVol).toLocaleString('de-DE')} kg</div>
+        <div><span class="wd-st-ic">🏆</span> ${prs} PRs</div>
+      </div>
+    </div>`;
+
+  (w.exercises || []).forEach(ex => {
+    html += `<div class="wd-ex">
+      <div class="wd-ex-head"><h3>${escapeHtml(ex.name)}</h3>${(ex.sets && ex.sets.length) ? '<span class="wd-rm-label">1RM</span>' : ''}</div>`;
+    if (ex.note) html += `<p class="wd-note">${escapeHtml(ex.note)}</p>`;
+    if (ex.skipped || !ex.sets || !ex.sets.length) {
+      html += `<p class="wd-skipped">ausgelassen</p>`;
+    } else {
+      ex.sets.forEach((s, i) => {
+        const rm = e1rm(s.weight, s.reps);
+        const wTxt = (s.weight > 0) ? `${s.weight} kg` : '+0 kg';
+        html += `<div class="wd-set">
+          <span class="wd-set-num">${i + 1}</span>
+          <span class="wd-set-val">${wTxt} × ${s.reps}</span>
+          <span class="wd-set-rm">${rm !== null ? rm : ''}</span>
+        </div>`;
+      });
+    }
+    html += `</div>`;
+  });
+  document.getElementById('wd-body').innerHTML = html;
+}
+
+function deleteWorkoutFromDetail() {
+  const data = loadData();
+  const w = data.workouts[detailWorkoutIndex];
+  if (!w) { navigate('history'); return; }
+  if (!confirm(`Workout „${w.routineName || 'Training'}" löschen?`)) return;
+  data.workouts.splice(detailWorkoutIndex, 1);
+  saveData(data);
+  syncPublicProfile();
+  showToast('Workout gelöscht', '#6d5a67');
+  navigate('history');
+}
+
+// Workout erneut ausführen — neue Session mit denselben Übungen, Werte vorbefüllt
+function repeatCurrentWorkout() {
+  const data = loadData();
+  const w = data.workouts[detailWorkoutIndex];
+  if (!w) return;
+  session = {
+    routineId: w.routineId || null,
+    routineName: w.routineName || 'Training',
+    startTs: null,
+    exercises: (w.exercises || []).filter(e => !e.skipped).map(ex => {
+      const sets = (ex.sets || []).map(s => ({ weight: s.weight || '', reps: s.reps || 10, done: false }));
+      if (!sets.length) sets.push({ weight: '', reps: 10, done: false });
+      return { exId: null, name: ex.name, tag: ex.tag || '', repsMin: 8, repsMax: 12, restSec: data.settings.restDefault || 90, note: ex.note || '', rpe: 7, skipped: false, alternative: ex.alternative || null, sets };
+    }),
+  };
+  if (!session.exercises.length) { showToast('Keine Übungen zum Wiederholen', '#c46a04'); return; }
+  showWorkoutIntro({ emoji: '🔁', name: session.routineName, exercises: session.exercises });
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────

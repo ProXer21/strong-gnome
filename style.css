@@ -1233,6 +1233,26 @@ canvas { max-width: 100%; }
   padding-top: 12px; border-top: 1px solid var(--border);
   font-size: 12px; font-weight: 700; color: var(--text-muted);
 }
+.hist-clickable { cursor: pointer; transition: transform .12s ease, box-shadow .2s ease; }
+.hist-clickable:active { transform: scale(.99); box-shadow: var(--shadow); }
+
+/* ─── Workout-Detailansicht ───────────────────────────────────────────── */
+.wd-head { margin-bottom: 22px; }
+.wd-head h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.wd-date { font-size: 14px; color: var(--text-muted); margin-top: 8px; font-weight: 500; }
+.wd-stats { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 16px; }
+.wd-stats > div { font-size: 14px; font-weight: 800; color: var(--text); display: flex; align-items: center; gap: 6px; }
+.wd-st-ic { font-size: 15px; }
+.wd-ex { margin-bottom: 22px; }
+.wd-ex-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.wd-ex-head h3 { font-size: 17px; font-weight: 800; color: var(--primary-dark); }
+.wd-rm-label { font-size: 12px; font-weight: 800; color: var(--text-muted); }
+.wd-note { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
+.wd-skipped { font-size: 14px; color: var(--text-muted); font-style: italic; }
+.wd-set { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 12px; padding: 7px 0; }
+.wd-set-num { font-size: 15px; font-weight: 700; color: var(--text-muted); }
+.wd-set-val { font-size: 16px; font-weight: 700; color: var(--text); }
+.wd-set-rm { font-size: 16px; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
 /* ─── Trainingsplan-Karte: Druck-Feedback ─────────────────────────────── */
 .routine-card { transition: transform .12s ease, box-shadow .2s ease; }
