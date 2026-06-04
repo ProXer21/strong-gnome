@@ -11,7 +11,7 @@ window.FIREBASE_CONFIG = {
 // Trage hier deine 3 EmailJS-Werte ein (siehe emailjs.com → Dashboard).
 // Solange "HIER_..." stehen bleibt, ist die Benachrichtigung einfach inaktiv.
 window.EMAILJS_CONFIG = {
-  publicKey:  "HIER_PUBLIC_KEY",   // EmailJS → Account → General → Public Key
-  serviceId:  "HIER_SERVICE_ID",   // EmailJS → Email Services
-  templateId: "HIER_TEMPLATE_ID"   // EmailJS → Email Templates
+  publicKey:  "-Z6E4ioceZZ-Uzvmw",   // EmailJS → Account → General → Public Key
+  serviceId:  "service_eu6ccro",     // EmailJS → Email Services
+  templateId: "template_mrkpe3n"     // EmailJS → Email Templates
 };
