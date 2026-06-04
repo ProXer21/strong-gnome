@@ -30,16 +30,60 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=13" />
+  <link rel="stylesheet" href="./style.css?v=14" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="./firebase-config.js"></script>
 </head>
-<body>
+<body data-state="loading">
 
 <!-- ─── Toast ─────────────────────────────────────────────────────────── -->
 <div id="toast" class="toast"></div>
+
+<!-- ─── Ladezustand ───────────────────────────────────────────────────── -->
+<div id="loading-screen"><div class="spinner"></div></div>
+
+<!-- ─── Login / Registrieren ──────────────────────────────────────────── -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">💪</div>
+    <h1 class="auth-title">FitnessTrainer</h1>
+    <p class="auth-sub">Melde dich an oder erstelle ein Konto</p>
+    <label class="auth-label">E-Mail</label>
+    <input id="auth-email" class="modal-input" type="email" inputmode="email" autocomplete="email" placeholder="du@beispiel.de" />
+    <label class="auth-label">Passwort</label>
+    <input id="auth-pw" class="modal-input" type="password" autocomplete="current-password" placeholder="••••••••" />
+    <button class="save-workout-btn" onclick="signIn()">Anmelden</button>
+    <button class="btn-secondary auth-signup" onclick="signUp()">Neues Konto erstellen</button>
+    <button class="auth-reset" onclick="resetPassword()">Passwort vergessen?</button>
+  </div>
+</div>
+
+<!-- ─── Onboarding (Profil anlegen) ───────────────────────────────────── -->
+<div id="onboarding">
+  <div class="auth-card">
+    <div class="auth-logo">🎯</div>
+    <h1 class="auth-title">Dein Profil</h1>
+    <p class="auth-sub">Damit wir deinen Fortschritt richtig berechnen</p>
+    <label class="auth-label">Name</label>
+    <input id="ob-name" class="modal-input" type="text" autocomplete="name" placeholder="Dein Name" />
+    <div class="ob-row">
+      <div>
+        <label class="auth-label">Startgewicht (kg)</label>
+        <input id="ob-start" class="modal-input" type="number" inputmode="decimal" step="0.1" placeholder="82" />
+      </div>
+      <div>
+        <label class="auth-label">Zielgewicht (kg)</label>
+        <input id="ob-goal" class="modal-input" type="number" inputmode="decimal" step="0.1" placeholder="70" />
+      </div>
+    </div>
+    <label class="auth-label">Zieldatum</label>
+    <input id="ob-date" class="modal-input" type="date" />
+    <button class="save-workout-btn" onclick="saveOnboarding()">Los geht's 💪</button>
+  </div>
+</div>
 
 <!-- ─── Electric-Border SVG-Filter (Blitz um den Button) ───────────────── -->
 <svg class="elec-defs" aria-hidden="true" focusable="false" width="0" height="0">
@@ -183,11 +227,11 @@
       <div class="stat-label">Wochen bis Ziel</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">70</div>
+      <div class="stat-value" id="goal-weight-stat">70</div>
       <div class="stat-label">Zielgewicht (kg)</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">Sep</div>
+      <div class="stat-value" id="goal-month-stat">Sep</div>
       <div class="stat-label">Zielmonat</div>
     </div>
   </div>
@@ -335,6 +379,11 @@
       <button class="btn-secondary" onclick="document.getElementById('import-file').click()">JSON importieren</button>
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this.files[0])" />
     </div>
+    <div class="setup-card" id="logout-card" style="display:none">
+      <h3>👤 Konto</h3>
+      <p>Angemeldet als <strong id="account-email">—</strong></p>
+      <button class="btn-danger" onclick="signOutUser()">Abmelden</button>
+    </div>
   </div>
 
   <div class="app-version">FitnessTrainer</div>
@@ -459,6 +508,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=16"></script>
+<script src="./app.js?v=17"></script>
 </body>
 </html>

@@ -1,14 +1,16 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v16';
+const APP_VERSION = 'v17';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
-const START_DATE   = '2026-06-02';
-const GOAL_DATE    = '2026-09-30';
-const START_WEIGHT = 82;
-const GOAL_WEIGHT  = 70;
+// Celinas ursprüngliche Werte — nur noch Fallback + Migration ihres Altbestands
+const LEGACY = { name: 'Celina', startDate: '2026-06-02', goalDate: '2026-09-30', startWeight: 82, goalWeight: 70 };
+
+// aktueller eingeloggter Nutzer (Firebase-UID) — bestimmt den Speicher-Key
+let currentUid = null;
+function storageKey() { return currentUid ? 'fitnessData_' + currentUid : 'fitnessData'; }
 
 // Standard-Routinen (Celinas Plan) — werden als bearbeitbare Vorlage angelegt
 const DEFAULT_ROUTINES = [
@@ -81,7 +83,7 @@ function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
 
 function loadData() {
   let d;
-  try { d = JSON.parse(localStorage.getItem('fitnessData') || 'null'); } catch { d = null; }
+  try { d = JSON.parse(localStorage.getItem(storageKey()) || 'null'); } catch { d = null; }
   if (!d) d = {};
 
   if (!Array.isArray(d.weightLog))    d.weightLog = [];
@@ -137,9 +139,18 @@ function loadData() {
 }
 
 function saveData(data) {
-  localStorage.setItem('fitnessData', JSON.stringify(data));
+  localStorage.setItem(storageKey(), JSON.stringify(data));
   if (window._fbRef) window._fbRef.set(data).catch(() => {});
 }
+
+// ─── Profil (pro Nutzer; ersetzt die früheren Konstanten) ───────────────────────
+
+function profileOf(d) { return (d && d.profile) || (loadData().profile) || {}; }
+function pStartWeight(d) { const p = profileOf(d); return typeof p.startWeight === 'number' ? p.startWeight : LEGACY.startWeight; }
+function pGoalWeight(d)  { const p = profileOf(d); return typeof p.goalWeight  === 'number' ? p.goalWeight  : LEGACY.goalWeight; }
+function pStartDate(d)   { const p = profileOf(d); return p.startDate || LEGACY.startDate; }
+function pGoalDate(d)    { const p = profileOf(d); return p.goalDate  || LEGACY.goalDate; }
+function pName(d)        { const p = profileOf(d); return p.name || LEGACY.name; }
 
 // ─── Helfer ───────────────────────────────────────────────────────────────────
 
@@ -151,11 +162,11 @@ function formatRest(sec) {
 }
 
 function weeksRemaining() {
-  return Math.max(0, Math.ceil((new Date(GOAL_DATE) - new Date()) / 86400000 / 7));
+  return Math.max(0, Math.ceil((new Date(pGoalDate()) - new Date()) / 86400000 / 7));
 }
 
 function latestWeight(data) {
-  if (!data.weightLog.length) return START_WEIGHT;
+  if (!data.weightLog.length) return pStartWeight(data);
   return data.weightLog[data.weightLog.length - 1].weight;
 }
 
@@ -335,19 +346,28 @@ function deleteWorkout(index) {
 
 function renderDashboard() {
   const data    = loadData();
+  const sw = pStartWeight(data), gw = pGoalWeight(data);
   const current = latestWeight(data);
-  const lost    = +(START_WEIGHT - current).toFixed(1);
-  const total   = START_WEIGHT - GOAL_WEIGHT;
+  const lost    = +(sw - current).toFixed(1);
+  const total   = (sw - gw) || 1;
   const pct     = Math.min(100, Math.max(0, Math.round((lost / total) * 100)));
+  const weeks   = weeksRemaining();
+
+  const hi = document.querySelector('#page-dashboard h1');
+  if (hi) hi.textContent = `Hallo, ${pName(data)}!`;
 
   document.getElementById('current-weight').textContent = current.toFixed(1);
-  document.getElementById('weight-lost').textContent    = lost >= 0 ? `-${lost}` : `+${Math.abs(lost)}`;
-  document.getElementById('weeks-left').textContent     = weeksRemaining();
+  document.getElementById('weight-lost').textContent    = lost > 0 ? `-${lost} kg` : lost < 0 ? `+${Math.abs(lost)} kg` : '±0';
+  document.getElementById('weeks-left').textContent     = weeks;
   document.getElementById('progress-bar').style.width   = pct + '%';
   document.getElementById('progress-pct').textContent   = pct + '%';
-  document.getElementById('progress-start').textContent = START_WEIGHT + ' kg';
-  document.getElementById('progress-goal').textContent  = GOAL_WEIGHT + ' kg';
-  document.getElementById('weekly-target').textContent  = ((START_WEIGHT - GOAL_WEIGHT) / 17).toFixed(2) + ' kg/Woche Ziel';
+  document.getElementById('progress-start').textContent = sw + ' kg';
+  document.getElementById('progress-goal').textContent  = gw + ' kg';
+  const weekly = weeks > 0 ? ((current - gw) / weeks) : (sw - gw);
+  document.getElementById('weekly-target').textContent  = `${Math.max(0, weekly).toFixed(2)} kg/Woche bis Ziel`;
+  const gws = document.getElementById('goal-weight-stat'); if (gws) gws.textContent = gw;
+  const gms = document.getElementById('goal-month-stat');
+  if (gms) { try { gms.textContent = new Date(pGoalDate(data)).toLocaleDateString('de-DE', { month: 'short' }); } catch (e) {} }
 
   const lastM = data.measurements[data.measurements.length - 1];
   const prevM = data.measurements[data.measurements.length - 2];
@@ -1172,12 +1192,13 @@ function switchChart(name) { activeChart = name; renderStats(); }
 function renderWeightChart(data) {
   const ctx = document.getElementById('canvas-weight')?.getContext('2d');
   if (!ctx) return;
-  const startMs = new Date(START_DATE).getTime(), goalMs = new Date(GOAL_DATE).getTime();
-  const daysTotal = (goalMs - startMs) / 86400000;
+  const sw = pStartWeight(data), gw = pGoalWeight(data);
+  const startMs = new Date(pStartDate(data)).getTime(), goalMs = new Date(pGoalDate(data)).getTime();
+  const daysTotal = Math.max(7, (goalMs - startMs) / 86400000);
   const goalLabels = [], goalData = [];
   for (let d = 0; d <= daysTotal; d += 7) {
     goalLabels.push(new Date(startMs + d * 86400000).toISOString().slice(0, 10));
-    goalData.push(+(START_WEIGHT - (START_WEIGHT - GOAL_WEIGHT) * (d / daysTotal)).toFixed(1));
+    goalData.push(+(sw - (sw - gw) * (d / daysTotal)).toFixed(1));
   }
   const wl = data.weightLog.map(w => w.date), wv = data.weightLog.map(w => w.weight);
   chartInstance = new Chart(ctx, {
@@ -1227,7 +1248,7 @@ function renderHeatmap(data) {
   if (!hm) return;
   hm.innerHTML = '';
   const trained = new Set(data.workouts.map(w => w.date));
-  const todayStr = today(), start = new Date(START_DATE), end = new Date();
+  const todayStr = today(), start = new Date(pStartDate(data)), end = new Date();
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const ds = d.toISOString().slice(0, 10);
     const div = document.createElement('div');
@@ -1241,7 +1262,7 @@ function renderVolumeChart(data) {
   if (!ctx) return;
   const weekMap = {};
   data.workouts.forEach(w => {
-    const week = 'W' + Math.ceil((new Date(w.date) - new Date(START_DATE)) / 86400000 / 7);
+    const week = 'W' + Math.ceil((new Date(w.date) - new Date(pStartDate(data))) / 86400000 / 7);
     const vol = (w.exercises || []).reduce((sum, ex) => sum + (ex.sets || []).reduce((s2, set) => s2 + (set.weight || 0) * (set.reps || 0), 0), 0);
     weekMap[week] = (weekMap[week] || 0) + vol;
   });
@@ -1310,39 +1331,152 @@ function setSyncStatus(status) {
   el.textContent = { ok: '☁️', syncing: '🔄', offline: '📴', error: '⚠️' }[status] || '';
   el.title = { ok: 'Cloud-Sync aktiv', syncing: 'Synchronisiere…', offline: 'Offline — lokal gespeichert', error: 'Sync-Fehler' }[status] || '';
 }
+function cloudValid(c) { return c && (Array.isArray(c.weightLog) || c.profile || Array.isArray(c.routines)); }
+
 function initFirebase() {
   const cfg = window.FIREBASE_CONFIG;
-  if (!cfg || cfg.apiKey === 'HIER_EINFÜGEN') return;
+  if (!cfg || cfg.apiKey === 'HIER_EINFÜGEN' || typeof firebase === 'undefined' || !firebase.auth) {
+    // Kein Firebase/Auth verfügbar → lokaler Einzelnutzer-Modus (Altverhalten)
+    routeAfterAuth(null);
+    return;
+  }
   try {
     if (!firebase.apps.length) firebase.initializeApp(cfg);
-    const db = firebase.firestore();
-    window._fbRef = db.collection('fitness').doc('mama');
-    setSyncStatus('syncing');
-    window._fbRef.get().then(snap => {
-      if (snap.exists) {
-        const cloud = snap.data();
-        if (cloud && Array.isArray(cloud.weightLog)) {
-          localStorage.setItem('fitnessData', JSON.stringify(cloud));
-          try { renderDashboard(); } catch (e) {}
-        }
-      }
-      setSyncStatus('ok');
-    }).catch(() => setSyncStatus('offline'));
-    window._fbRef.onSnapshot(snap => {
-      if (!snap.exists) { setSyncStatus('ok'); return; }
-      const cloud = snap.data();
-      if (!cloud || !Array.isArray(cloud.weightLog)) return;
-      localStorage.setItem('fitnessData', JSON.stringify(cloud));
-      const active = document.querySelector('.page.active')?.id;
-      try {
-        if (active === 'page-dashboard') renderDashboard();
-        if (active === 'page-stats') renderStats();
-        if (active === 'page-history') renderHistory();
-        if (active === 'page-training' && trainingView === 'list') renderRoutineList();
-      } catch (e) {}
-      setSyncStatus('ok');
-    }, () => setSyncStatus('error'));
-  } catch (e) { setSyncStatus('error'); }
+    const auth = firebase.auth();
+    try { auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch (e) {}
+    auth.onAuthStateChanged(user => {
+      if (window._fbUnsub) { try { window._fbUnsub(); } catch (e) {} window._fbUnsub = null; }
+      window._fbRef = null;
+      if (user) { currentUid = user.uid; attachUserDoc(user); }
+      else { currentUid = null; setSyncStatus(''); showAuthScreen(); }
+    });
+  } catch (e) { routeAfterAuth(null); }
+}
+
+function attachUserDoc(user) {
+  const db = firebase.firestore();
+  window._fbRef = db.collection('fitness').doc(user.uid);
+  setSyncStatus('syncing');
+  window._fbRef.get().then(snap => {
+    if (snap.exists && cloudValid(snap.data())) {
+      localStorage.setItem(storageKey(), JSON.stringify(snap.data()));
+    } else {
+      maybeMigrateLegacy();
+    }
+    setSyncStatus('ok');
+    startUserListener();
+    routeAfterAuth(user);
+  }).catch(() => { setSyncStatus('offline'); routeAfterAuth(user); });
+}
+
+function startUserListener() {
+  if (!window._fbRef) return;
+  window._fbUnsub = window._fbRef.onSnapshot(snap => {
+    if (!snap.exists || !cloudValid(snap.data())) { setSyncStatus('ok'); return; }
+    localStorage.setItem(storageKey(), JSON.stringify(snap.data()));
+    const active = document.querySelector('.page.active')?.id;
+    try {
+      if (active === 'page-dashboard') renderDashboard();
+      if (active === 'page-stats') renderStats();
+      if (active === 'page-history') renderHistory();
+      if (active === 'page-training' && trainingView === 'list') renderRoutineList();
+    } catch (e) {}
+    setSyncStatus('ok');
+  }, () => setSyncStatus('error'));
+}
+
+// Celinas Altbestand (Key 'fitnessData' ohne uid) genau einmal ins erste Konto übernehmen
+function maybeMigrateLegacy() {
+  if (localStorage.getItem('legacyMigrated')) return;
+  let legacy = null;
+  try { legacy = JSON.parse(localStorage.getItem('fitnessData') || 'null'); } catch (e) {}
+  const has = legacy && ((legacy.weightLog && legacy.weightLog.length) || (legacy.workouts && legacy.workouts.length) || (legacy.routines && legacy.routines.length));
+  if (!has) return;
+  if (!legacy.profile) legacy.profile = { ...LEGACY };
+  localStorage.setItem(storageKey(), JSON.stringify(legacy));
+  localStorage.setItem('legacyMigrated', '1');
+  if (window._fbRef) window._fbRef.set(legacy).catch(() => {});
+  showToast('Deine bisherigen Daten wurden übernommen 💜', '#c42e86');
+}
+
+// ─── Auth-UI / Routing ──────────────────────────────────────────────────────
+
+function setAppState(s) { document.body.dataset.state = s; }
+function showAuthScreen() { setAppState('auth'); }
+function showOnboarding() {
+  setAppState('onboarding');
+  const d = document.getElementById('ob-date');
+  if (d && !d.value) { const t = new Date(); t.setMonth(t.getMonth() + 3); d.value = t.toISOString().slice(0, 10); }
+}
+function enterApp() {
+  setAppState('app');
+  const u = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+  const ae = document.getElementById('account-email');
+  if (ae) ae.textContent = u ? u.email : 'lokaler Modus';
+  const lo = document.getElementById('logout-card');
+  if (lo) lo.style.display = u ? 'block' : 'none';
+  navigate('dashboard');
+}
+
+function routeAfterAuth() {
+  const data = loadData();
+  const hasData = (data.weightLog && data.weightLog.length) || (data.workouts && data.workouts.length) || (data.measurements && data.measurements.length);
+  if (!data.profile && !hasData) { showOnboarding(); return; }
+  enterApp();
+}
+
+function val(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+
+function authErr(e) {
+  const m = {
+    'auth/invalid-email': 'Ungültige E-Mail-Adresse',
+    'auth/email-already-in-use': 'Diese E-Mail ist bereits registriert',
+    'auth/weak-password': 'Passwort zu schwach (mind. 6 Zeichen)',
+    'auth/wrong-password': 'Falsches Passwort',
+    'auth/user-not-found': 'Kein Konto mit dieser E-Mail',
+    'auth/invalid-credential': 'E-Mail oder Passwort falsch',
+    'auth/missing-password': 'Bitte Passwort eingeben',
+    'auth/too-many-requests': 'Zu viele Versuche — bitte später erneut',
+    'auth/network-request-failed': 'Keine Verbindung',
+    'auth/operation-not-allowed': 'E-Mail-Login ist in Firebase noch nicht aktiviert',
+  };
+  return m[e && e.code] || (e && e.message) || 'Fehler';
+}
+
+function signIn() {
+  const email = val('auth-email'), pw = val('auth-pw');
+  if (!email || !pw) { showToast('E-Mail & Passwort eingeben', '#c46a04'); return; }
+  firebase.auth().signInWithEmailAndPassword(email, pw).catch(e => showToast(authErr(e), '#c0392b'));
+}
+function signUp() {
+  const email = val('auth-email'), pw = val('auth-pw');
+  if (!email || !pw) { showToast('E-Mail & Passwort eingeben', '#c46a04'); return; }
+  firebase.auth().createUserWithEmailAndPassword(email, pw).catch(e => showToast(authErr(e), '#c0392b'));
+}
+function resetPassword() {
+  const email = val('auth-email');
+  if (!email) { showToast('Erst deine E-Mail eingeben', '#c46a04'); return; }
+  firebase.auth().sendPasswordResetEmail(email)
+    .then(() => showToast('Passwort-Reset-Mail gesendet 📧', '#0f9d72'))
+    .catch(e => showToast(authErr(e), '#c0392b'));
+}
+function signOutUser() {
+  if (!confirm('Wirklich abmelden?')) return;
+  if (typeof firebase !== 'undefined' && firebase.auth) firebase.auth().signOut();
+}
+
+function saveOnboarding() {
+  const name = val('ob-name');
+  const sw = parseFloat(val('ob-start'));
+  const gw = parseFloat(val('ob-goal'));
+  const gd = val('ob-date');
+  if (!name || !sw || !gw || !gd) { showToast('Bitte alles ausfüllen', '#c46a04'); return; }
+  const data = loadData();
+  data.profile = { name, startWeight: sw, goalWeight: gw, startDate: today(), goalDate: gd };
+  if (!data.weightLog.length) data.weightLog.push({ date: today(), weight: sw });
+  saveData(data);
+  enterApp();
+  showToast(`Willkommen, ${name}! 💪`);
 }
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
@@ -1384,6 +1518,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll('.app-version').forEach(el => { el.textContent = `FitnessTrainer · ${APP_VERSION}`; });
 
-  initFirebase();
-  navigate('dashboard');
+  initFirebase();   // entscheidet: Login / Onboarding / App
 });

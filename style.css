@@ -1394,6 +1394,57 @@ canvas { max-width: 100%; }
   margin: 18px 0 6px;
 }
 
+/* ─── Login / Onboarding / Ladezustand ────────────────────────────────── */
+#loading-screen, #auth-screen, #onboarding {
+  position: fixed; inset: 0; z-index: 500;
+  display: none;
+  align-items: center; justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(1100px 540px at 100% -10%, var(--primary-light), transparent 55%),
+    radial-gradient(900px 500px at -10% 8%, var(--primary-50), transparent 50%),
+    var(--bg);
+  overflow-y: auto;
+}
+body[data-state="loading"] #loading-screen { display: flex; }
+body[data-state="auth"] #auth-screen { display: flex; }
+body[data-state="onboarding"] #onboarding { display: flex; }
+/* App-Chrome erst nach Login/Onboarding zeigen */
+body:not([data-state="app"]) nav { display: none; }
+body:not([data-state="app"]) .page { display: none !important; }
+
+.spinner {
+  width: 46px; height: 46px; border-radius: 50%;
+  border: 4px solid var(--primary-light); border-top-color: var(--primary);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.auth-card {
+  width: 100%; max-width: 380px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 22px calc(26px + env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-lg);
+  animation: introCard .4s cubic-bezier(.22,1,.36,1) both;
+}
+.auth-logo { font-size: 48px; text-align: center; line-height: 1; }
+.auth-title {
+  text-align: center; font-size: 26px; font-weight: 800; letter-spacing: -0.02em;
+  margin-top: 8px; color: var(--primary-dark);
+  background: var(--grad-primary); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.auth-sub { text-align: center; font-size: 14px; color: var(--text-muted); margin: 4px 0 22px; }
+.auth-label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-muted); margin: 0 2px 6px; }
+.auth-card .modal-input { margin-bottom: 14px; }
+.auth-card .save-workout-btn { margin-top: 6px; min-height: 54px; }
+.auth-signup { margin-top: 10px; margin-bottom: 2px; }
+.auth-reset {
+  width: 100%; border: none; background: none; color: var(--text-muted);
+  font-family: inherit; font-size: 13px; font-weight: 600; padding: 12px; cursor: pointer; text-decoration: underline;
+}
+.ob-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
 /* ════════════════════════════════════════════════════════════════════
    DARK MODE
    ════════════════════════════════════════════════════════════════════ */
