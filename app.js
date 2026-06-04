@@ -1347,7 +1347,23 @@ function initFirebase() {
 document.addEventListener('DOMContentLoaded', () => {
   applyTheme(loadData().settings.theme);
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      // Nur bei einem echten Update neu laden (nicht bei der Erstinstallation)
+      if (hadController && !reloading) { reloading = true; location.reload(); }
+    });
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => { try { reg.update(); } catch (e) {} })
+      .catch(() => {});
+    // beim Zurückkehren in die App auf Updates prüfen
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        navigator.serviceWorker.getRegistration().then(r => { if (r) try { r.update(); } catch (e) {} }).catch(() => {});
+      }
+    });
+  }
 
   document.querySelectorAll('.nav-btn').forEach(btn =>
     btn.addEventListener('click', () => navigate(btn.dataset.page)));
