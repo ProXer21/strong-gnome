@@ -33,7 +33,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=29" />
+  <link rel="stylesheet" href="./style.css?v=30" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -305,6 +305,19 @@
   <button class="save-workout-btn" onclick="navigate('training')">
     Training starten →
   </button>
+
+  <!-- Heute gegessen -->
+  <div class="card dash-nut-card" id="dash-nut" role="button" onclick="navigate('nutrition')">
+    <div class="dnc-head">
+      <span class="card-title">Heute gegessen</span>
+      <span class="dnc-link">Details →</span>
+    </div>
+    <div class="dnc-row">
+      <h2><span id="dn-kcal">0</span> <span class="dnc-unit">/ <span id="dn-goal">2000</span> kcal</span></h2>
+      <span class="dnc-rem" id="dn-rem">2000 kcal übrig</span>
+    </div>
+    <div class="progress-wrap"><div class="progress-bar" id="dn-bar" style="width:0%"></div></div>
+  </div>
 
   <div class="app-version">Strong Gnome</div>
 </section>
@@ -629,6 +642,40 @@
   </div>
 </div>
 
+<!-- ─── Ernährung / Kalorientracker ───────────────────────────────────── -->
+<section id="page-nutrition" class="page">
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div>
+      <h1>Ernährung</h1>
+      <p id="nut-goal-info">Tagesziel</p>
+    </div>
+    <button class="icon-btn" aria-label="Tagesziel einstellen" onclick="openNutGoals()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+
+  <!-- Datum -->
+  <div class="nut-datebar">
+    <button class="nd-arrow" onclick="nutShiftDay(-1)" aria-label="Vorheriger Tag">‹</button>
+    <span id="nut-date-label">Heute</span>
+    <button class="nd-arrow" id="nut-fwd" onclick="nutShiftDay(1)" aria-label="Nächster Tag">›</button>
+  </div>
+
+  <!-- Tagesübersicht -->
+  <div class="card nut-summary">
+    <div class="nut-ring-wrap" id="nut-ring-wrap"></div>
+    <div class="nut-macros" id="nut-macros"></div>
+  </div>
+
+  <!-- Mahlzeiten -->
+  <div id="nut-meals"></div>
+
+  <div class="app-version">Strong Gnome</div>
+</section>
+
+<!-- Modal-Container für Ernährung (Hinzufügen / Ziel) -->
+<div id="nut-modal-root"></div>
+
 <!-- ─── Navigation ────────────────────────────────────────────────────── -->
 <nav>
   <button class="nav-btn active" data-page="dashboard" aria-label="Start">
@@ -642,6 +689,12 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
     </span>
     <span>Training</span>
+  </button>
+  <button class="nav-btn" data-page="nutrition" aria-label="Ernährung">
+    <span class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2"/><path d="M5 2v20"/><path d="M21 15V2a5 5 0 0 0-3 9v4"/><path d="M18 15v7"/></svg>
+    </span>
+    <span>Essen</span>
   </button>
   <button class="nav-btn" data-page="history" aria-label="Verlauf">
     <span class="icon" aria-hidden="true">
@@ -663,6 +716,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=40"></script>
+<script src="./app.js?v=41"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v1.0.0';
+const APP_VERSION = 'v1.1.0';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -128,6 +128,23 @@ function loadData() {
   if (typeof d.settings.restDefault !== 'number') d.settings.restDefault = 90;
   if (!FREQ_LABELS[d.settings.weightFreq])  d.settings.weightFreq  = 'weekly';
   if (!FREQ_LABELS[d.settings.measureFreq]) d.settings.measureFreq = 'monthly';
+
+  // ── Ernährung / Kalorientracker (v1.1) — defensiv defaulten (Abwärtskompatibilität) ──
+  if (!d.nutrition || typeof d.nutrition !== 'object') d.nutrition = {};
+  if (!Array.isArray(d.nutrition.log))   d.nutrition.log   = [];   // {id,date,meal,name,kcal,protein,carbs,fat}
+  if (!Array.isArray(d.nutrition.foods)) d.nutrition.foods = [];   // gespeicherte „Meine Lebensmittel"
+  if (!d.nutrition.goals || typeof d.nutrition.goals !== 'object') d.nutrition.goals = {};
+  const ng = d.nutrition.goals;
+  if (ng.mode !== 'auto' && ng.mode !== 'manual') ng.mode = 'auto';
+  if (typeof ng.kcal    !== 'number') ng.kcal    = 2000;
+  if (typeof ng.protein !== 'number') ng.protein = 110;
+  if (typeof ng.carbs   !== 'number') ng.carbs   = 200;
+  if (typeof ng.fat     !== 'number') ng.fat     = 65;
+  if (ng.sex !== 'male' && ng.sex !== 'female') ng.sex = 'female';
+  if (typeof ng.age      !== 'number') ng.age = 30;
+  if (typeof ng.height   !== 'number') ng.height = 168;
+  if (typeof ng.activity !== 'number') ng.activity = 1.375;
+  if (typeof ng.breastfeeding !== 'boolean') ng.breastfeeding = false;
 
   // Routinen: aus Vorlage anlegen, falls noch keine vorhanden
   if (!Array.isArray(d.routines) || !d.routines.length) {
@@ -350,6 +367,7 @@ function navigate(pageId) {
   if (pageId === 'history')   renderHistory();
   if (pageId === 'checkin')   renderCheckin();
   if (pageId === 'stats')     renderStats();
+  if (pageId === 'nutrition') renderNutrition();
   if (pageId === 'profile')   renderProfile();
   if (pageId === 'friends')   renderFriends();
   if (pageId === 'workout-detail') renderWorkoutDetail();
@@ -569,6 +587,21 @@ function renderDashboard() {
   } else {
     document.getElementById('nw-title').textContent = 'Kein Trainingsplan';
     nwList.innerHTML = '<div class="nw-exercise"><span class="ex-name">Lege im Training einen Trainingsplan an</span></div>';
+  }
+
+  // „Heute gegessen"-Karte
+  const dashNut = document.getElementById('dash-nut');
+  if (dashNut) {
+    const goals = nutEffectiveGoals(data);
+    const t = nutDayTotals(data, today());
+    const rem = goals.kcal - t.kcal;
+    const pct = goals.kcal > 0 ? Math.min(100, Math.round((t.kcal / goals.kcal) * 100)) : 0;
+    document.getElementById('dn-kcal').textContent = Math.round(t.kcal);
+    document.getElementById('dn-goal').textContent = goals.kcal;
+    document.getElementById('dn-rem').textContent  = rem >= 0 ? `${rem} kcal übrig` : `${Math.abs(rem)} kcal drüber`;
+    document.getElementById('dn-rem').classList.toggle('over', rem < 0);
+    document.getElementById('dn-bar').style.width = pct + '%';
+    document.getElementById('dn-bar').style.background = rem < 0 ? 'var(--danger)' : 'var(--grad-primary)';
   }
 }
 
@@ -2372,6 +2405,376 @@ function notifySignup(name) {
       app: 'Strong Gnome',
     }, { publicKey: c.publicKey }).catch(() => {});
   } catch (e) {}
+}
+
+// ─── Ernährung / Kalorientracker (v1.1) ────────────────────────────────────────
+
+const MEALS = [
+  { key: 'breakfast', label: 'Frühstück', emoji: '🌅' },
+  { key: 'lunch',     label: 'Mittagessen', emoji: '🍽️' },
+  { key: 'dinner',    label: 'Abendessen', emoji: '🌙' },
+  { key: 'snack',     label: 'Snacks',    emoji: '🍎' },
+];
+const MACROS = [
+  { key: 'protein', label: 'Eiweiß', short: 'E', color: 'var(--primary)' },
+  { key: 'carbs',   label: 'Kohlenhydrate', short: 'KH', color: 'var(--amber)' },
+  { key: 'fat',     label: 'Fett', short: 'F', color: 'var(--mint)' },
+];
+
+let nutDate = today();          // aktuell angezeigter Tag (YYYY-MM-DD)
+let nutModalMeal = null;        // Mahlzeit, zu der gerade hinzugefügt wird
+
+// Effektive Tagesziele: manuell ODER automatisch berechnet
+function nutEffectiveGoals(data) {
+  const g = data.nutrition.goals;
+  if (g.mode === 'manual') return { kcal: g.kcal, protein: g.protein, carbs: g.carbs, fat: g.fat };
+  return computeAutoGoals(data);
+}
+
+// Automatische Berechnung: Mifflin-St-Jeor → TDEE → Zielanpassung (+ Stillen-Bonus, Sicherheits-Floor)
+function computeAutoGoals(data) {
+  const g = data.nutrition.goals;
+  const w  = latestWeight(data) || pStartWeight(data);
+  const gw = pGoalWeight(data);
+  const bmr  = 10 * w + 6.25 * (g.height || 168) - 5 * (g.age || 30) + (g.sex === 'male' ? 5 : -161);
+  let tdee = bmr * (g.activity || 1.375);
+  if (gw < w - 0.5)      tdee *= 0.82;   // Abnehmen: ~18 % Defizit
+  else if (gw > w + 0.5) tdee *= 1.10;   // Aufbau: ~10 % Überschuss
+  if (g.breastfeeding)   tdee += 330;    // Stillen: zusätzlicher Bedarf
+  const floor = g.breastfeeding ? 1600 : 1300;   // verantwortungsvolle Untergrenze
+  const kcal = Math.max(floor, Math.round(tdee / 10) * 10);
+  const protein = Math.round(1.8 * gw);                       // 1,8 g/kg Zielgewicht
+  const fat     = Math.round(0.9 * gw);                       // 0,9 g/kg Zielgewicht
+  const carbs   = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+  return { kcal, protein, carbs, fat };
+}
+
+function nutDayEntries(data, date) { return data.nutrition.log.filter(e => e.date === date); }
+
+function nutDayTotals(data, date) {
+  return nutDayEntries(data, date).reduce((t, e) => ({
+    kcal:    t.kcal    + (+e.kcal    || 0),
+    protein: t.protein + (+e.protein || 0),
+    carbs:   t.carbs   + (+e.carbs   || 0),
+    fat:     t.fat     + (+e.fat     || 0),
+  }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
+}
+
+function nutShiftDay(delta) {
+  const d = new Date(nutDate + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  const iso = d.toISOString().slice(0, 10);
+  if (iso > today()) return;          // nicht in die Zukunft
+  nutDate = iso;
+  renderNutrition();
+}
+
+// Ring (SVG) für die Kalorien
+function nutRing(consumed, goal) {
+  const r = 52, c = 2 * Math.PI * r;
+  const pct = goal > 0 ? Math.min(1, consumed / goal) : 0;
+  const over = goal > 0 && consumed > goal;
+  const dash = c * pct;
+  const stroke = over ? 'var(--danger)' : 'var(--primary)';
+  return `<svg viewBox="0 0 120 120" class="kcal-ring" aria-hidden="true">
+    <circle cx="60" cy="60" r="${r}" class="kr-track"/>
+    <circle cx="60" cy="60" r="${r}" class="kr-val" stroke="${stroke}"
+      stroke-dasharray="${dash.toFixed(1)} ${(c - dash).toFixed(1)}" stroke-dashoffset="0"
+      transform="rotate(-90 60 60)"/>
+  </svg>`;
+}
+
+function renderNutrition() {
+  const data = loadData();
+  const goals = nutEffectiveGoals(data);
+  const totals = nutDayTotals(data, nutDate);
+  const isToday = nutDate === today();
+  const remaining = goals.kcal - totals.kcal;
+
+  // Datumskopf
+  const dLabel = isToday ? 'Heute'
+    : (() => { const dt = new Date(nutDate + 'T00:00:00');
+        return dt.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' }); })();
+  const head = document.getElementById('nut-date-label');
+  if (head) head.textContent = dLabel;
+  const fwd = document.getElementById('nut-fwd');
+  if (fwd) fwd.disabled = isToday;
+
+  // Kalorien-Ring + Zahlen
+  const ringWrap = document.getElementById('nut-ring-wrap');
+  if (ringWrap) {
+    ringWrap.innerHTML = nutRing(totals.kcal, goals.kcal) +
+      `<div class="kcal-center">
+         <div class="kc-num">${Math.round(totals.kcal)}</div>
+         <div class="kc-sub">von ${goals.kcal} kcal</div>
+         <div class="kc-rem ${remaining < 0 ? 'over' : ''}">${remaining >= 0 ? remaining + ' übrig' : Math.abs(remaining) + ' drüber'}</div>
+       </div>`;
+  }
+
+  // Makro-Balken
+  const macroWrap = document.getElementById('nut-macros');
+  if (macroWrap) {
+    macroWrap.innerHTML = MACROS.map(m => {
+      const have = Math.round(totals[m.key]), goal = goals[m.key] || 0;
+      const pct = goal > 0 ? Math.min(100, Math.round((have / goal) * 100)) : 0;
+      return `<div class="macro">
+        <div class="macro-top"><span>${m.label}</span><span class="macro-val">${have} / ${goal} g</span></div>
+        <div class="macro-track"><div class="macro-fill" style="width:${pct}%;background:${m.color}"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  // Mahlzeiten
+  const mealsWrap = document.getElementById('nut-meals');
+  if (mealsWrap) {
+    mealsWrap.innerHTML = MEALS.map(meal => {
+      const entries = nutDayEntries(data, nutDate).filter(e => e.meal === meal.key);
+      const sub = entries.reduce((s, e) => s + (+e.kcal || 0), 0);
+      const rows = entries.length ? entries.map(e => `
+        <div class="nut-entry" onclick="openFoodModal('${meal.key}','${e.id}')" role="button">
+          <div class="ne-info">
+            <span class="ne-name">${escapeHtml(e.name || 'Eintrag')}</span>
+            <span class="ne-macros">E ${Math.round(e.protein || 0)} · KH ${Math.round(e.carbs || 0)} · F ${Math.round(e.fat || 0)} g</span>
+          </div>
+          <span class="ne-kcal">${Math.round(e.kcal || 0)} kcal</span>
+          <button class="ne-del" onclick="event.stopPropagation(); nutDeleteEntry('${e.id}')" aria-label="Eintrag löschen">✕</button>
+        </div>`).join('')
+        : '<div class="nut-empty">Noch nichts erfasst</div>';
+      return `<div class="nut-meal">
+        <div class="nm-head">
+          <span class="nm-title">${meal.emoji} ${meal.label}</span>
+          <span class="nm-sub">${Math.round(sub)} kcal</span>
+        </div>
+        ${rows}
+        <button class="nm-add" onclick="openFoodModal('${meal.key}')">+ Hinzufügen</button>
+      </div>`;
+    }).join('');
+  }
+
+  // Ziel-Modus-Hinweis
+  const gi = document.getElementById('nut-goal-info');
+  if (gi) gi.textContent = data.nutrition.goals.mode === 'auto'
+    ? `Automatisches Ziel: ${goals.kcal} kcal/Tag`
+    : `Manuelles Ziel: ${goals.kcal} kcal/Tag`;
+}
+
+// ── Lebensmittel hinzufügen / bearbeiten (Modal) ──
+function openFoodModal(meal, entryId) {
+  nutModalMeal = meal;
+  const data = loadData();
+  const editing = entryId ? data.nutrition.log.find(e => e.id === entryId) : null;
+  const root = document.getElementById('nut-modal-root');
+  if (!root) return;
+
+  const savedFoods = data.nutrition.foods.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de'));
+  const savedHtml = savedFoods.length ? savedFoods.map(f => `
+    <button type="button" class="saved-food" onclick="nutPickSaved('${f.id}')">
+      <span class="sf-name">${escapeHtml(f.name)}</span>
+      <span class="sf-kcal">${Math.round(f.kcal || 0)} kcal</span>
+      <span class="sf-del" onclick="event.stopPropagation(); nutDeleteFood('${f.id}')" aria-label="Löschen">✕</span>
+    </button>`).join('') : '<p class="nut-empty">Noch keine gespeicherten Lebensmittel.</p>';
+
+  root.innerHTML = `
+  <div class="modal-overlay" onclick="if(event.target===this)closeFoodModal()">
+    <div class="modal-sheet" role="dialog" aria-label="Lebensmittel hinzufügen">
+      <div class="modal-head">
+        <h3>${editing ? 'Eintrag bearbeiten' : 'Hinzufügen'}</h3>
+        <button class="modal-x" onclick="closeFoodModal()" aria-label="Schließen">✕</button>
+      </div>
+      ${editing ? '' : `
+      <div class="saved-foods-block">
+        <div class="sfb-label">Meine Lebensmittel</div>
+        <div class="saved-foods">${savedHtml}</div>
+      </div>
+      <div class="modal-divider"><span>oder neu eingeben</span></div>`}
+      <div class="modal-form">
+        <label>Bezeichnung
+          <input id="nf-name" class="input-field" type="text" placeholder="z. B. Haferflocken mit Milch" value="${editing ? escapeHtml(editing.name || '') : ''}">
+        </label>
+        <label>Kalorien (kcal)
+          <input id="nf-kcal" class="input-field" type="number" inputmode="decimal" min="0" placeholder="0" value="${editing ? (editing.kcal ?? '') : ''}">
+        </label>
+        <div class="macro-inputs">
+          <label>Eiweiß (g)<input id="nf-protein" class="input-field" type="number" inputmode="decimal" min="0" placeholder="0" value="${editing ? (editing.protein ?? '') : ''}"></label>
+          <label>KH (g)<input id="nf-carbs" class="input-field" type="number" inputmode="decimal" min="0" placeholder="0" value="${editing ? (editing.carbs ?? '') : ''}"></label>
+          <label>Fett (g)<input id="nf-fat" class="input-field" type="number" inputmode="decimal" min="0" placeholder="0" value="${editing ? (editing.fat ?? '') : ''}"></label>
+        </div>
+        ${editing ? '' : `<label class="chk"><input type="checkbox" id="nf-save"> In „Meine Lebensmittel" speichern</label>`}
+      </div>
+      <div class="modal-actions">
+        ${editing ? `<button class="btn-ghost-danger" onclick="nutDeleteEntry('${editing.id}', true)">Löschen</button>` : ''}
+        <button class="save-workout-btn" onclick="nutSaveEntry(${editing ? `'${editing.id}'` : 'null'})">${editing ? 'Speichern' : 'Hinzufügen'}</button>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(() => { const n = document.getElementById('nf-name'); if (n && !editing) n.focus(); }, 50);
+}
+
+function closeFoodModal() {
+  const root = document.getElementById('nut-modal-root');
+  if (root) root.innerHTML = '';
+  nutModalMeal = null;
+}
+
+function nutPickSaved(id) {
+  const data = loadData();
+  const f = data.nutrition.foods.find(x => x.id === id);
+  if (!f) return;
+  const set = (i, v) => { const el = document.getElementById(i); if (el) el.value = (v ?? 0); };
+  set('nf-name', f.name); set('nf-kcal', f.kcal); set('nf-protein', f.protein); set('nf-carbs', f.carbs); set('nf-fat', f.fat);
+}
+
+function nutNum(id) { const el = document.getElementById(id); const v = el ? parseFloat(el.value) : NaN; return isNaN(v) ? 0 : Math.max(0, v); }
+
+function nutSaveEntry(entryId) {
+  const name = val('nf-name');
+  const kcal = nutNum('nf-kcal');
+  if (!name) { showToast('Bitte eine Bezeichnung eingeben', '#c46a04'); return; }
+  if (!kcal) { showToast('Bitte Kalorien eingeben', '#c46a04'); return; }
+  const data = loadData();
+  const fields = { name, kcal, protein: nutNum('nf-protein'), carbs: nutNum('nf-carbs'), fat: nutNum('nf-fat') };
+
+  if (entryId) {
+    const e = data.nutrition.log.find(x => x.id === entryId);
+    if (e) Object.assign(e, fields);
+  } else {
+    data.nutrition.log.push({ id: uid('n'), date: nutDate, meal: nutModalMeal || 'snack', ...fields });
+    const save = document.getElementById('nf-save');
+    if (save && save.checked && !data.nutrition.foods.some(f => (f.name || '').toLowerCase() === name.toLowerCase())) {
+      data.nutrition.foods.push({ id: uid('f'), ...fields });
+    }
+  }
+  saveData(data);
+  closeFoodModal();
+  renderNutrition();
+  if (typeof renderDashboard === 'function' && document.getElementById('page-dashboard')?.classList.contains('active')) renderDashboard();
+  showToast(entryId ? '✓ Gespeichert' : '✓ Hinzugefügt');
+}
+
+function nutDeleteEntry(id, fromModal) {
+  const data = loadData();
+  const i = data.nutrition.log.findIndex(e => e.id === id);
+  if (i < 0) return;
+  data.nutrition.log.splice(i, 1);
+  saveData(data);
+  if (fromModal) closeFoodModal();
+  renderNutrition();
+  showToast('Eintrag gelöscht', '#6d5a67');
+}
+
+function nutDeleteFood(id) {
+  const data = loadData();
+  const i = data.nutrition.foods.findIndex(f => f.id === id);
+  if (i < 0) return;
+  data.nutrition.foods.splice(i, 1);
+  saveData(data);
+  openFoodModal(nutModalMeal);   // Modal neu zeichnen
+}
+
+// ── Tagesziel einstellen (Modal: automatisch / manuell) ──
+function openNutGoals() {
+  const data = loadData();
+  const g = data.nutrition.goals;
+  const auto = computeAutoGoals(data);
+  const root = document.getElementById('nut-modal-root');
+  if (!root) return;
+  const actOpts = [
+    { v: 1.2,   t: 'wenig (Bürojob)' },
+    { v: 1.375, t: 'leicht aktiv (1–3×/Woche)' },
+    { v: 1.55,  t: 'aktiv (3–5×/Woche)' },
+    { v: 1.725, t: 'sehr aktiv (6–7×/Woche)' },
+  ];
+  root.innerHTML = `
+  <div class="modal-overlay" onclick="if(event.target===this)closeFoodModal()">
+    <div class="modal-sheet" role="dialog" aria-label="Tagesziel">
+      <div class="modal-head"><h3>Tagesziel</h3><button class="modal-x" onclick="closeFoodModal()" aria-label="Schließen">✕</button></div>
+      <div class="mode-seg">
+        <button class="ms-btn ${g.mode === 'auto' ? 'sel' : ''}" onclick="setNutMode('auto')">Automatisch</button>
+        <button class="ms-btn ${g.mode === 'manual' ? 'sel' : ''}" onclick="setNutMode('manual')">Manuell</button>
+      </div>
+
+      <div id="nut-auto-block" style="${g.mode === 'auto' ? '' : 'display:none'}">
+        <p class="nut-hint">Wir berechnen deinen Bedarf aus deinem Gewicht, Ziel & diesen Angaben.</p>
+        <div class="macro-inputs">
+          <label>Geschlecht
+            <select id="ng-sex" class="input-field" onchange="nutGoalsLivePreview()">
+              <option value="female" ${g.sex === 'female' ? 'selected' : ''}>weiblich</option>
+              <option value="male" ${g.sex === 'male' ? 'selected' : ''}>männlich</option>
+            </select>
+          </label>
+          <label>Alter<input id="ng-age" class="input-field" type="number" inputmode="numeric" value="${g.age}" oninput="nutGoalsLivePreview()"></label>
+          <label>Größe (cm)<input id="ng-height" class="input-field" type="number" inputmode="numeric" value="${g.height}" oninput="nutGoalsLivePreview()"></label>
+        </div>
+        <label>Aktivität
+          <select id="ng-activity" class="input-field" onchange="nutGoalsLivePreview()">
+            ${actOpts.map(o => `<option value="${o.v}" ${Math.abs(g.activity - o.v) < 0.01 ? 'selected' : ''}>${o.t}</option>`).join('')}
+          </select>
+        </label>
+        <label class="chk"><input type="checkbox" id="ng-bf" ${g.breastfeeding ? 'checked' : ''} onchange="nutGoalsLivePreview()"> Ich stille (+ Energiebedarf)</label>
+        <div class="auto-preview" id="ng-preview">
+          <strong id="ngp-kcal">${auto.kcal}</strong> kcal · E ${auto.protein} · KH ${auto.carbs} · F ${auto.fat} g
+        </div>
+      </div>
+
+      <div id="nut-manual-block" style="${g.mode === 'manual' ? '' : 'display:none'}">
+        <p class="nut-hint">Trage deine eigenen Tageswerte ein.</p>
+        <label>Kalorien (kcal)<input id="ng-kcal" class="input-field" type="number" inputmode="numeric" value="${g.kcal}"></label>
+        <div class="macro-inputs">
+          <label>Eiweiß (g)<input id="ng-protein" class="input-field" type="number" value="${g.protein}"></label>
+          <label>KH (g)<input id="ng-carbs" class="input-field" type="number" value="${g.carbs}"></label>
+          <label>Fett (g)<input id="ng-fat" class="input-field" type="number" value="${g.fat}"></label>
+        </div>
+      </div>
+
+      <div class="modal-actions"><button class="save-workout-btn" onclick="saveNutGoals()">Ziel speichern</button></div>
+    </div>
+  </div>`;
+}
+
+let _pendingNutMode = null;
+function setNutMode(mode) {
+  _pendingNutMode = mode;
+  document.querySelectorAll('.ms-btn').forEach(b => b.classList.toggle('sel', b.textContent.toLowerCase().startsWith(mode === 'auto' ? 'auto' : 'man')));
+  const a = document.getElementById('nut-auto-block'), m = document.getElementById('nut-manual-block');
+  if (a) a.style.display = mode === 'auto' ? '' : 'none';
+  if (m) m.style.display = mode === 'manual' ? '' : 'none';
+}
+
+function nutGoalsLivePreview() {
+  const data = loadData();
+  const g = { ...data.nutrition.goals,
+    sex: document.getElementById('ng-sex')?.value || 'female',
+    age: parseFloat(document.getElementById('ng-age')?.value) || 30,
+    height: parseFloat(document.getElementById('ng-height')?.value) || 168,
+    activity: parseFloat(document.getElementById('ng-activity')?.value) || 1.375,
+    breastfeeding: !!document.getElementById('ng-bf')?.checked };
+  const auto = computeAutoGoals({ ...data, nutrition: { ...data.nutrition, goals: g } });
+  const el = document.getElementById('ng-preview');
+  if (el) el.innerHTML = `<strong>${auto.kcal}</strong> kcal · E ${auto.protein} · KH ${auto.carbs} · F ${auto.fat} g`;
+}
+
+function saveNutGoals() {
+  const data = loadData();
+  const g = data.nutrition.goals;
+  const mode = _pendingNutMode || g.mode;
+  g.mode = mode;
+  if (mode === 'auto') {
+    g.sex = document.getElementById('ng-sex')?.value || 'female';
+    g.age = parseFloat(document.getElementById('ng-age')?.value) || g.age;
+    g.height = parseFloat(document.getElementById('ng-height')?.value) || g.height;
+    g.activity = parseFloat(document.getElementById('ng-activity')?.value) || g.activity;
+    g.breastfeeding = !!document.getElementById('ng-bf')?.checked;
+  } else {
+    g.kcal = parseFloat(document.getElementById('ng-kcal')?.value) || g.kcal;
+    g.protein = parseFloat(document.getElementById('ng-protein')?.value) || g.protein;
+    g.carbs = parseFloat(document.getElementById('ng-carbs')?.value) || g.carbs;
+    g.fat = parseFloat(document.getElementById('ng-fat')?.value) || g.fat;
+  }
+  _pendingNutMode = null;
+  saveData(data);
+  closeFoodModal();
+  renderNutrition();
+  showToast('✓ Tagesziel gespeichert');
 }
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
