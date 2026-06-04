@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=17" />
+  <link rel="stylesheet" href="./style.css?v=18" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -57,7 +57,10 @@
       <label class="auth-label">E-Mail</label>
       <input id="login-email" class="modal-input" type="email" inputmode="email" autocomplete="email" placeholder="du@beispiel.de" />
       <label class="auth-label">Passwort</label>
-      <input id="login-pw" class="modal-input" type="password" autocomplete="current-password" placeholder="••••••••" />
+      <div class="pw-wrap">
+        <input id="login-pw" class="modal-input" type="password" autocomplete="current-password" placeholder="••••••••" />
+        <button type="button" class="pw-eye" aria-label="Passwort anzeigen" onclick="togglePw('login-pw', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
       <button class="save-workout-btn" onclick="signIn()">Anmelden</button>
       <button class="auth-reset" onclick="resetPassword()">Passwort vergessen?</button>
       <div class="auth-divider"><span>oder</span></div>
@@ -77,9 +80,15 @@
       <label class="auth-label">E-Mail</label>
       <input id="reg-email" class="modal-input" type="email" inputmode="email" autocomplete="email" placeholder="du@beispiel.de" />
       <label class="auth-label">Passwort</label>
-      <input id="reg-pw" class="modal-input" type="password" autocomplete="new-password" placeholder="mind. 6 Zeichen" />
+      <div class="pw-wrap">
+        <input id="reg-pw" class="modal-input" type="password" autocomplete="new-password" placeholder="mind. 6 Zeichen" />
+        <button type="button" class="pw-eye" aria-label="Passwort anzeigen" onclick="togglePw('reg-pw', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
       <label class="auth-label">Passwort bestätigen</label>
-      <input id="reg-pw2" class="modal-input" type="password" autocomplete="new-password" placeholder="••••••••" />
+      <div class="pw-wrap">
+        <input id="reg-pw2" class="modal-input" type="password" autocomplete="new-password" placeholder="••••••••" />
+        <button type="button" class="pw-eye" aria-label="Passwort anzeigen" onclick="togglePw('reg-pw2', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
       <button class="save-workout-btn" onclick="signUp()">Konto erstellen</button>
     </div>
 
@@ -533,6 +542,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=20"></script>
+<script src="./app.js?v=21"></script>
 </body>
 </html>
