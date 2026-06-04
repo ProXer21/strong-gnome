@@ -1,5 +1,8 @@
 'use strict';
 
+// App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
+const APP_VERSION = 'v14';
+
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
 const START_DATE   = '2026-06-02';
@@ -1378,6 +1381,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const tt = document.getElementById('theme-toggle');
   if (tt) tt.addEventListener('click', toggleTheme);
+
+  const ver = document.getElementById('app-version');
+  if (ver) ver.textContent = `FitnessTrainer · ${APP_VERSION}`;
 
   initFirebase();
   navigate('dashboard');
