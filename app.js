@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v19';
+const APP_VERSION = 'v20';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -1402,7 +1402,7 @@ function maybeMigrateLegacy() {
 // ─── Auth-UI / Routing ──────────────────────────────────────────────────────
 
 function setAppState(s) { document.body.dataset.state = s; }
-function showAuthScreen() { setAppState('auth'); }
+function showAuthScreen() { setAppState('auth'); authMode('login'); }
 function showOnboarding() {
   setAppState('onboarding');
   const d = document.getElementById('ob-date');
@@ -1446,18 +1446,27 @@ function authErr(e) {
   return m[e && e.code] || (e && e.message) || 'Fehler';
 }
 
+function authMode(m) {
+  const reg = m === 'register';
+  const l = document.getElementById('auth-login'), r = document.getElementById('auth-register');
+  if (l) l.style.display = reg ? 'none' : 'block';
+  if (r) r.style.display = reg ? 'block' : 'none';
+}
+
 function signIn() {
-  const email = val('auth-email'), pw = val('auth-pw');
+  const email = val('login-email'), pw = val('login-pw');
   if (!email || !pw) { showToast('E-Mail & Passwort eingeben', '#c46a04'); return; }
   firebase.auth().signInWithEmailAndPassword(email, pw).catch(e => showToast(authErr(e), '#c0392b'));
 }
 function signUp() {
-  const email = val('auth-email'), pw = val('auth-pw');
+  const email = val('reg-email'), pw = val('reg-pw'), pw2 = val('reg-pw2');
   if (!email || !pw) { showToast('E-Mail & Passwort eingeben', '#c46a04'); return; }
+  if (pw.length < 6) { showToast('Passwort: mind. 6 Zeichen', '#c46a04'); return; }
+  if (pw !== pw2) { showToast('Passwörter stimmen nicht überein', '#c46a04'); return; }
   firebase.auth().createUserWithEmailAndPassword(email, pw).catch(e => showToast(authErr(e), '#c0392b'));
 }
 function resetPassword() {
-  const email = val('auth-email');
+  const email = val('login-email');
   if (!email) { showToast('Erst deine E-Mail eingeben', '#c46a04'); return; }
   firebase.auth().sendPasswordResetEmail(email)
     .then(() => showToast('Passwort-Reset-Mail gesendet 📧', '#0f9d72'))
