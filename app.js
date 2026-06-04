@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v37';
+const APP_VERSION = 'v38';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -2352,8 +2352,26 @@ function saveOnboarding() {
   if (!data.weightLog.length) data.weightLog.push({ date: today(), weight: sw });
   saveData(data);
   applyTheme(data.settings.theme);
+  notifySignup(name);   // Entwickler per E-Mail über neue Registrierung informieren
   enterApp();
   showToast(`Willkommen, ${name}! 💪`);
+}
+
+// Schickt dem Entwickler eine E-Mail „Neue Registrierung" (EmailJS).
+// Nur Name + Zeitpunkt — keine E-Mail-Adresse des Nutzers. Pro Konto nur einmal.
+function notifySignup(name) {
+  try {
+    const key = 'signupNotified_' + (currentUid || 'local');
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, '1');
+    const c = window.EMAILJS_CONFIG;
+    if (!c || !c.publicKey || /HIER_/.test(c.publicKey) || typeof emailjs === 'undefined') return;
+    emailjs.send(c.serviceId, c.templateId, {
+      name: name || 'Unbekannt',
+      time: new Date().toLocaleString('de-DE'),
+      app: 'Strong Gnome',
+    }, { publicKey: c.publicKey }).catch(() => {});
+  } catch (e) {}
 }
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
