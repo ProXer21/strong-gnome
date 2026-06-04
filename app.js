@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v23';
+const APP_VERSION = 'v24';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -1203,7 +1203,7 @@ function renderCheckin() {
       const last = lastMeasure(data, f.key);
       const hint = last !== null ? `zuletzt ${last} cm` : '';
       return `<div class="input-field">
-        <label>${f.emoji} ${escapeHtml(f.label)}${hint ? ` <span class="ci-last">${hint}</span>` : ''}</label>
+        <label>${escapeHtml(f.label)}${hint ? ` <span class="ci-last">${hint}</span>` : ''}</label>
         <input type="number" id="ci-${f.key}" inputmode="decimal" step="0.5" min="0" max="250" placeholder="—" />
         <span class="unit">cm</span>
       </div>`;
