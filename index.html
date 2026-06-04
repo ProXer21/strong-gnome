@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=21" />
+  <link rel="stylesheet" href="./style.css?v=22" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -115,6 +115,22 @@
     </div>
     <label class="auth-label">Zieldatum</label>
     <input id="ob-date" class="modal-input" type="date" />
+
+    <label class="auth-label">Dein Design</label>
+    <div class="design-pick">
+      <button type="button" class="design-opt sel" data-design="light" onclick="pickDesign('light')">
+        <span class="dp-swatch dp-rose"></span>
+        <span class="dp-name">Rosé</span>
+        <span class="dp-desc">hell &amp; feminin</span>
+      </button>
+      <button type="button" class="design-opt" data-design="masc" onclick="pickDesign('masc')">
+        <span class="dp-swatch dp-masc"></span>
+        <span class="dp-name">Maskulin</span>
+        <span class="dp-desc">düster &amp; schwer</span>
+      </button>
+    </div>
+    <p class="design-hint">Du kannst das jederzeit oben rechts umschalten.</p>
+
     <button class="save-workout-btn" onclick="saveOnboarding()">Los geht's 💪</button>
   </div>
 </div>
@@ -506,6 +522,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=25"></script>
+<script src="./app.js?v=26"></script>
 </body>
 </html>

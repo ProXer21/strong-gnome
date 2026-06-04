@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v25';
+const APP_VERSION = 'v26';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -1528,12 +1528,29 @@ function maybeMigrateLegacy() {
 
 // ─── Auth-UI / Routing ──────────────────────────────────────────────────────
 
+// Status-Bar-Farbe für die neutralen Vor-App-Screens (Login/Registrieren/Profil)
+function setNeutralBar() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', '#f3f4f6');
+}
+
 function setAppState(s) { document.body.dataset.state = s; }
-function showAuthScreen() { setAppState('auth'); authMode('login'); }
+function showAuthScreen() { setAppState('auth'); authMode('login'); setNeutralBar(); }
 function showOnboarding() {
   setAppState('onboarding');
+  setNeutralBar();
+  chosenDesign = 'light';
+  refreshDesignPick();
   const d = document.getElementById('ob-date');
   if (d && !d.value) { const t = new Date(); t.setMonth(t.getMonth() + 3); d.value = t.toISOString().slice(0, 10); }
+}
+
+// ── Design-Auswahl beim Onboarding (Rosé vs. Maskulin) ──
+let chosenDesign = 'light';
+function pickDesign(theme) { chosenDesign = theme; refreshDesignPick(); }
+function refreshDesignPick() {
+  document.querySelectorAll('.design-opt').forEach(b =>
+    b.classList.toggle('sel', b.dataset.design === chosenDesign));
 }
 function enterApp() {
   setAppState('app');
@@ -1639,8 +1656,12 @@ function saveOnboarding() {
   if (!name || !sw || !gw || !gd) { showToast('Bitte alles ausfüllen', '#c46a04'); return; }
   const data = loadData();
   data.profile = { name, startWeight: sw, goalWeight: gw, startDate: today(), goalDate: gd };
+  // gewähltes Design speichern (Rosé = hell-feminin, Maskulin = düster)
+  data.settings.theme = chosenDesign === 'masc' ? 'masc' : 'light';
+  data.settings.femMode = chosenDesign === 'masc' ? 'light' : chosenDesign;
   if (!data.weightLog.length) data.weightLog.push({ date: today(), weight: sw });
   saveData(data);
+  applyTheme(data.settings.theme);
   enterApp();
   showToast(`Willkommen, ${name}! 💪`);
 }
