@@ -1,0 +1,77 @@
+{
+  "commits": [
+    {
+      "msg": "Doku & Aufräumen zum v1.0.0-Release",
+      "ver": "v1.0.0",
+      "iso": "2026-06-04T21:51:21+02:00",
+      "hash": "1044855"
+    },
+    {
+      "msg": "Versionsanzeige auf SemVer umgestellt: v1.0.0 (Build 40)",
+      "ver": "v1.0.0",
+      "iso": "2026-06-04T21:41:39+02:00",
+      "hash": "1f5e03d"
+    },
+    {
+      "msg": "EmailJS-Keys eingetragen → Registrierungs-Mail aktiv",
+      "ver": "v39",
+      "iso": "2026-06-04T21:13:08+02:00",
+      "hash": "fc06edc"
+    },
+    {
+      "msg": "Feature: E-Mail-Benachrichtigung bei neuer Registrierung (EmailJS)",
+      "ver": "v38",
+      "iso": "2026-06-04T20:48:59+02:00",
+      "hash": "cd1e113"
+    },
+    {
+      "msg": "Rebrand in Quelldateien: Strong Gnome",
+      "ver": "v37",
+      "iso": "2026-06-04T20:09:55+02:00",
+      "hash": "37bcf7c"
+    },
+    {
+      "msg": "Rebrand: App heißt jetzt \"Strong Gnome\"",
+      "ver": "v36",
+      "iso": "2026-06-04T20:00:36+02:00",
+      "hash": "eabbe25"
+    },
+    {
+      "msg": "Verlauf: Workout-Detailansicht (Strong-Stil)",
+      "ver": "v35",
+      "iso": "2026-06-04T19:53:57+02:00",
+      "hash": "3de0200"
+    },
+    {
+      "msg": "Fix: rosa Linie am oberen Rand (PWA theme_color) entfernt",
+      "ver": "v34",
+      "iso": "2026-06-04T19:39:45+02:00",
+      "hash": "a9c61ba"
+    },
+    {
+      "msg": "Fix: neue Konten erbten fälschlich Celinas Alt-Daten",
+      "ver": "v33",
+      "iso": "2026-06-04T19:31:49+02:00",
+      "hash": "d2812e9"
+    },
+    {
+      "msg": "Social Phase 3: Gruppentraining",
+      "ver": "v32",
+      "iso": "2026-06-04T15:48:46+02:00",
+      "hash": "27bd36b"
+    },
+    {
+      "msg": "Social Phase 2: Freunde verbinden + Trainingspläne teilen",
+      "ver": "v31",
+      "iso": "2026-06-04T15:27:52+02:00",
+      "hash": "1452423"
+    },
+    {
+      "msg": "Profil-/Einstellungsseite",
+      "ver": "v30",
+      "iso": "2026-06-04T15:11:12+02:00",
+      "hash": "0e9ce97"
+    }
+  ],
+  "updatedAt": "2026-06-04T22:33:40.027168+02:00"
+}

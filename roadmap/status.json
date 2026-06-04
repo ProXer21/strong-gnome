@@ -1,0 +1,16 @@
+{
+  "state": "active",
+  "current": "Roadmap-Dashboard um Live-Panels erweitert (Aktivität · Builds · Fokus · Firebase)",
+  "version": "v1.0.0",
+  "build": 40,
+  "focus": "v1.1 · Kalorientracker (Phase 1)",
+  "branch": "main",
+  "updatedAt": "2026-06-04T22:30:00+02:00",
+  "activity": [
+    { "t": "2026-06-04T22:30:00+02:00", "msg": "Live-Panels ins Roadmap-Dashboard gebaut" },
+    { "t": "2026-06-04T22:18:00+02:00", "msg": "Meilensteine prominenter gemacht, Layout verbreitert" },
+    { "t": "2026-06-04T22:05:00+02:00", "msg": "Roadmap-Dashboard mit Inhalt gefüllt (Timeline, Tech-Stack, Prozess)" },
+    { "t": "2026-06-04T21:51:00+02:00", "msg": "Doku & Aufräumen zum v1.0.0-Release" },
+    { "t": "2026-06-04T21:41:00+02:00", "msg": "Versionsanzeige auf SemVer (v1.0.0) umgestellt" }
+  ]
+}
