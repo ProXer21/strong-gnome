@@ -663,33 +663,102 @@ function cancelIntro() {
 function beginWorkout() {
   document.getElementById('workout-intro').classList.remove('show');
   if (!session) return;
+  // Audio im User-Gesture entsperren (für die Countdown-Sounds)
+  try { const c = audioCtx(); if (c && c.state === 'suspended') c.resume(); } catch (e) {}
   navigate('training');
   showTrainingView('workout');
   runCountdown(() => {
     session.startTs = Date.now();
     startSessionTimer();
-    try { if (navigator.vibrate) navigator.vibrate([0, 60, 40, 120]); } catch (e) {}
   });
 }
 
-// 3 · 2 · 1 · Los — kurzer Countdown mit Puls + Vibration (antippen = überspringen)
+// 3 · 2 · 1 · LOS — cinematischer Countdown (antippen = überspringen)
 function runCountdown(cb) {
-  const el = document.getElementById('countdown');
-  const num = document.getElementById('countdown-num');
+  const el    = document.getElementById('countdown');
+  const num   = document.getElementById('countdown-num');
+  const ring  = el.querySelector('.cd-ring');
+  const flash = el.querySelector('.cd-flash');
   let n = 3, done = false;
-  const finish = () => { if (done) return; done = true; clearTimeout(window._cdT); el.classList.remove('show'); el.onclick = null; cb(); };
+
+  const finish = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(window._cdT);
+    el.classList.remove('show', 'shake');
+    el.onclick = null;
+    cb();
+  };
   el.onclick = finish;
   el.classList.add('show');
+
+  const burst = (text, isGo) => {
+    num.textContent = text;
+    num.classList.toggle('is-go', !!isGo);
+    // Animationen neu auslösen
+    num.classList.remove('slam'); ring.classList.remove('go'); el.classList.remove('shake');
+    void num.offsetWidth;
+    num.classList.add('slam'); ring.classList.add('go'); el.classList.add('shake');
+    if (isGo) { flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on'); }
+  };
+
   const tick = () => {
     if (done) return;
-    if (n <= 0) { num.textContent = 'Los!'; num.classList.remove('pop'); void num.offsetWidth; num.classList.add('pop'); window._cdT = setTimeout(finish, 500); return; }
-    num.textContent = n;
-    num.classList.remove('pop'); void num.offsetWidth; num.classList.add('pop');
-    try { if (navigator.vibrate) navigator.vibrate(70); } catch (e) {}
+    if (n <= 0) {
+      burst('LOS!', true);
+      playGo();
+      try { if (navigator.vibrate) navigator.vibrate([0, 90, 60, 90, 60, 280]); } catch (e) {}
+      window._cdT = setTimeout(finish, 700);
+      return;
+    }
+    burst(String(n), false);
+    playThud(140 + (3 - n) * 28);
+    try { if (navigator.vibrate) navigator.vibrate(130 + (3 - n) * 45); } catch (e) {}
     n--;
-    window._cdT = setTimeout(tick, 720);
+    window._cdT = setTimeout(tick, 820);
   };
   tick();
+}
+
+// ─── Sound-Effekte (Web Audio) ────────────────────────────────────────────────
+
+function audioCtx() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  window._ac = window._ac || new AC();
+  return window._ac;
+}
+
+// tiefer Impact-„Boom" pro Countdown-Zahl
+function playThud(freq) {
+  const c = audioCtx(); if (!c) return;
+  const t = c.currentTime;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(freq, t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.4), t + 0.35);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.55, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+  o.connect(g); g.connect(c.destination);
+  o.start(t); o.stop(t + 0.45);
+}
+
+// triumphaler Akkord beim „LOS!"
+function playGo() {
+  const c = audioCtx(); if (!c) return;
+  const t = c.currentTime;
+  [392, 523, 659, 784, 1047].forEach((f, i) => {
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'sawtooth';
+    o.frequency.value = f;
+    const st = t + i * 0.025;
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(0.3, st + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    o.connect(g); g.connect(c.destination);
+    o.start(st); o.stop(t + 0.75);
+  });
 }
 
 function startSessionTimer() {

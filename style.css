@@ -1210,8 +1210,13 @@ canvas { max-width: 100%; }
   padding: 24px;
   background: var(--grad-primary);
 }
+.intro-overlay::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at 50% 42%, transparent 45%, rgba(0,0,0,.38) 100%);
+}
 .intro-overlay.show { display: flex; animation: introIn .3s ease both; }
 @keyframes introIn { from { opacity: 0; } to { opacity: 1; } }
+.intro-card { position: relative; z-index: 1; }
 .intro-card {
   text-align: center; color: #fff; max-width: 360px; width: 100%;
   animation: introCard .5s cubic-bezier(.22,1,.36,1) both;
@@ -1243,25 +1248,79 @@ canvas { max-width: 100%; }
   opacity: .85; padding: 10px 20px;
 }
 
-/* ─── 3·2·1 Countdown ─────────────────────────────────────────────────── */
+/* ─── 3·2·1 Countdown (cinematisch · maximale Aura) ───────────────────── */
 .countdown {
   position: fixed; inset: 0; z-index: 450;
   display: none; align-items: center; justify-content: center;
-  background: rgba(20,16,25,.72);
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(232,75,160,.35), transparent 62%),
+    #0a060e;
 }
 .countdown.show { display: flex; }
-.countdown #countdown-num {
-  font-size: 140px; font-weight: 800; color: #fff;
-  text-shadow: 0 8px 40px rgba(232,75,160,.6);
-  letter-spacing: -0.04em;
+.countdown.shake { animation: cdShake .42s cubic-bezier(.36,.07,.19,.97); }
+@keyframes cdShake {
+  0%,100% { transform: translate(0,0); }
+  12% { transform: translate(-11px, 6px); }
+  26% { transform: translate(10px, -7px); }
+  40% { transform: translate(-9px, 5px); }
+  56% { transform: translate(8px, -4px); }
+  72% { transform: translate(-5px, 3px); }
+  88% { transform: translate(3px, -2px); }
 }
-.countdown #countdown-num.pop { animation: cdPop .7s cubic-bezier(.22,1,.36,1); }
-@keyframes cdPop {
-  0% { transform: scale(.3); opacity: 0; }
-  35% { transform: scale(1.15); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+
+/* pulsierender Glow hinter der Zahl */
+.cd-glow {
+  position: absolute; inset: 0; margin: auto;
+  width: 560px; height: 560px; max-width: 130vw; max-height: 130vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(232,75,160,.55), rgba(232,75,160,.12) 45%, transparent 68%);
+  filter: blur(18px);
+  z-index: 0;
+  animation: cdGlow 1.4s ease-in-out infinite;
 }
+@keyframes cdGlow { 0%,100% { opacity: .45; transform: scale(.92); } 50% { opacity: .9; transform: scale(1.1); } }
+
+/* Schockwellen-Ring bei jedem Schlag */
+.cd-ring {
+  position: absolute; inset: 0; margin: auto;
+  width: 170px; height: 170px; border-radius: 50%;
+  border: 4px solid rgba(255,255,255,.9);
+  opacity: 0; z-index: 1;
+}
+.cd-ring.go { animation: cdRing .82s cubic-bezier(.2,.7,.3,1); }
+@keyframes cdRing {
+  0% { opacity: .95; transform: scale(.45); border-width: 10px; }
+  100% { opacity: 0; transform: scale(3.6); border-width: 1px; }
+}
+
+/* die Zahl — riesig, einschlagend */
+#countdown-num {
+  position: relative; z-index: 2;
+  font-size: clamp(130px, 48vw, 260px);
+  font-weight: 800; color: #fff;
+  letter-spacing: -0.05em; line-height: 1;
+  text-shadow: 0 0 30px rgba(232,75,160,.95), 0 0 80px rgba(232,75,160,.6), 0 12px 60px rgba(0,0,0,.55);
+}
+#countdown-num.slam { animation: cdSlam .5s cubic-bezier(.2,1.15,.3,1); }
+@keyframes cdSlam {
+  0% { transform: scale(2.7); opacity: 0; filter: blur(10px); }
+  42% { transform: scale(.88); opacity: 1; filter: blur(0); }
+  62% { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+#countdown-num.is-go {
+  font-size: clamp(96px, 36vw, 200px);
+  text-shadow: 0 0 50px #fff, 0 0 110px rgba(232,75,160,1), 0 0 160px rgba(232,75,160,.7);
+}
+
+/* weißer Blitz beim LOS! */
+.cd-flash {
+  position: absolute; inset: 0; z-index: 5;
+  background: #fff; opacity: 0; pointer-events: none;
+}
+.cd-flash.on { animation: cdFlash .5s ease-out; }
+@keyframes cdFlash { 0% { opacity: .9; } 100% { opacity: 0; } }
 
 /* ════════════════════════════════════════════════════════════════════
    DARK MODE
