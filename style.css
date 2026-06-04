@@ -1445,6 +1445,19 @@ body:not([data-state="app"]) .page { display: none !important; }
 }
 .ob-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0 12px; color: var(--text-muted); font-size: 12px; font-weight: 700; }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.btn-google {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text);
+  font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+  min-height: 52px; box-shadow: var(--shadow-sm);
+  transition: background .2s ease, transform .15s ease;
+}
+.btn-google:active { transform: scale(.98); background: var(--primary-50); }
+.btn-google svg { flex-shrink: 0; }
+
 /* ════════════════════════════════════════════════════════════════════
    DARK MODE
    ════════════════════════════════════════════════════════════════════ */

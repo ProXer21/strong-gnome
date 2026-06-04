@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v18';
+const APP_VERSION = 'v19';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -1438,7 +1438,10 @@ function authErr(e) {
     'auth/missing-password': 'Bitte Passwort eingeben',
     'auth/too-many-requests': 'Zu viele Versuche — bitte später erneut',
     'auth/network-request-failed': 'Keine Verbindung',
-    'auth/operation-not-allowed': 'E-Mail-Login ist in Firebase noch nicht aktiviert',
+    'auth/operation-not-allowed': 'Diese Login-Methode ist in Firebase noch nicht aktiviert',
+    'auth/unauthorized-domain': 'Domain in Firebase nicht freigegeben (Authorized domains)',
+    'auth/account-exists-with-different-credential': 'Konto existiert bereits mit anderer Methode',
+    'auth/popup-closed-by-user': 'Anmeldung abgebrochen',
   };
   return m[e && e.code] || (e && e.message) || 'Fehler';
 }
@@ -1460,6 +1463,21 @@ function resetPassword() {
     .then(() => showToast('Passwort-Reset-Mail gesendet 📧', '#0f9d72'))
     .catch(e => showToast(authErr(e), '#c0392b'));
 }
+function signInWithGoogle() {
+  if (typeof firebase === 'undefined' || !firebase.auth) return;
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  firebase.auth().signInWithPopup(provider).catch(e => {
+    const code = e && e.code;
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return; // abgebrochen
+    if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+      firebase.auth().signInWithRedirect(provider).catch(er => showToast(authErr(er), '#c0392b'));
+      return;
+    }
+    showToast(authErr(e), '#c0392b');
+  });
+}
+
 function signOutUser() {
   if (!confirm('Wirklich abmelden?')) return;
   if (typeof firebase !== 'undefined' && firebase.auth) firebase.auth().signOut();
