@@ -119,6 +119,7 @@ function loadData() {
       if (typeof e.sets !== 'number') e.sets = 3;
       if (typeof e.repsMin !== 'number') e.repsMin = 10;
       if (typeof e.repsMax !== 'number') e.repsMax = 12;
+      if (typeof e.restSec !== 'number') e.restSec = d.settings.restDefault || 90;
     });
   });
 
@@ -140,6 +141,11 @@ function saveData(data) {
 // ─── Helfer ───────────────────────────────────────────────────────────────────
 
 function today() { return new Date().toISOString().slice(0, 10); }
+
+function formatRest(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+}
 
 function weeksRemaining() {
   return Math.max(0, Math.ceil((new Date(GOAL_DATE) - new Date()) / 86400000 / 7));
@@ -257,7 +263,69 @@ function navigate(pageId) {
 
   if (pageId === 'dashboard') renderDashboard();
   if (pageId === 'training')  renderTraining();
+  if (pageId === 'history')   renderHistory();
   if (pageId === 'stats')     renderStats();
+}
+
+// ─── Verlauf ──────────────────────────────────────────────────────────────────
+
+function renderHistory() {
+  const data = loadData();
+  const list = document.getElementById('history-list');
+  list.innerHTML = '';
+  if (!data.workouts.length) {
+    list.innerHTML = '<div class="empty-state"><div class="es-icon">📅</div><p>Noch keine Workouts. Starte dein erstes Training!</p></div>';
+    return;
+  }
+  // neueste zuerst
+  data.workouts.map((w, i) => ({ w, i })).reverse().forEach(({ w, i }) => {
+    const totalVol = (w.exercises || []).reduce((sum, ex) =>
+      sum + (ex.sets || []).reduce((s2, st) => s2 + (st.weight || 0) * (st.reps || 0), 0), 0);
+    const dur = w.durationSec ? `${Math.floor(w.durationSec / 60)} Min` : '—';
+
+    const lines = (w.exercises || []).map(ex => {
+      if (ex.skipped) return `<div class="hist-ex"><span>${escapeHtml(ex.name)}</span><span class="he-best">ausgelassen</span></div>`;
+      const best = (ex.sets || []).reduce((m, s) => (s.weight > (m?.weight ?? -1) ? s : m), null);
+      const bestTxt = best ? `${best.weight} kg × ${best.reps}` : '—';
+      return `<div class="hist-ex"><span>${ex.sets.length}× ${escapeHtml(ex.name)}</span><span class="he-best">${bestTxt}</span></div>`;
+    }).join('');
+
+    const card = document.createElement('div');
+    card.className = 'card hist-card';
+    card.innerHTML = `
+      <div class="hist-head">
+        <div>
+          <h3>${escapeHtml(w.routineName || 'Training')}</h3>
+          <p class="hist-date">${formatDateDE(w.date)}</p>
+        </div>
+        <button class="hist-del" onclick="deleteWorkout(${i})" aria-label="Workout löschen">✕</button>
+      </div>
+      <div class="hist-exs">${lines}</div>
+      <div class="hist-foot">
+        <span>⏱ ${dur}</span>
+        <span>🏋️ ${Math.round(totalVol).toLocaleString('de-DE')} kg</span>
+        <span>📋 ${(w.exercises || []).length} Übungen</span>
+      </div>`;
+    list.appendChild(card);
+  });
+}
+
+function formatDateDE(iso) {
+  try {
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+  } catch (e) { return iso; }
+}
+
+function deleteWorkout(index) {
+  const data = loadData();
+  if (index < 0 || index >= data.workouts.length) return;
+  const w = data.workouts[index];
+  if (!confirm(`Workout „${w.routineName || 'Training'}" vom ${formatDateDE(w.date)} löschen?`)) return;
+  data.workouts.splice(index, 1);
+  saveData(data);
+  showToast('Workout gelöscht', '#6d5a67');
+  renderHistory();
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -481,7 +549,13 @@ function duplicateRoutine() {
 }
 
 // ── Übung-hinzufügen-Modal ──
-function openExModal() {
+// mode: 'routine' (Editor) | 'sessionAdd' (Workout) | 'sessionReplace' (Übung ersetzen)
+let exModalMode = 'routine';
+let exModalTarget = null;
+
+function openExModal(mode, target) {
+  exModalMode = mode || 'routine';
+  exModalTarget = (target === undefined || target === null) ? null : target;
   const data = loadData();
   const dl = document.getElementById('ex-datalist');
   dl.innerHTML = data.exerciseLibrary.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
@@ -489,6 +563,11 @@ function openExModal() {
   document.getElementById('ex-sets').value = 3;
   document.getElementById('ex-rmin').value = 10;
   document.getElementById('ex-rmax').value = 12;
+  // Felder (Sätze/Wdh) nur bei Neu-Anlage zeigen, beim Ersetzen ausblenden
+  const fields = document.querySelector('#ex-modal .modal-fields');
+  if (fields) fields.style.display = exModalMode === 'sessionReplace' ? 'none' : 'flex';
+  const h = document.querySelector('#ex-modal h3');
+  if (h) h.textContent = exModalMode === 'sessionReplace' ? 'Übung ersetzen' : 'Übung hinzufügen';
   document.getElementById('ex-modal').classList.add('open');
   setTimeout(() => document.getElementById('ex-input').focus(), 100);
 }
@@ -497,17 +576,40 @@ function closeExModal() { document.getElementById('ex-modal').classList.remove('
 function confirmAddExercise() {
   const name = document.getElementById('ex-input').value.trim();
   if (!name) { showToast('Bitte einen Namen eingeben', '#c46a04'); return; }
+  const sets    = Math.max(1, parseInt(document.getElementById('ex-sets').value) || 3);
+  const repsMin = Math.max(1, parseInt(document.getElementById('ex-rmin').value) || 10);
+  const repsMax = Math.max(repsMin, parseInt(document.getElementById('ex-rmax').value) || 12);
+
+  if (exModalMode === 'sessionReplace' && session && exModalTarget !== null) {
+    session.exercises[exModalTarget].name = name;
+    session.exercises[exModalTarget].alternative = null;
+    session.exercises[exModalTarget].skipped = false;
+    closeExModal();
+    renderActiveWorkout();
+    showToast(`Übung ersetzt: ${name}`, '#c42e86');
+    return;
+  }
+
+  if (exModalMode === 'sessionAdd' && session) {
+    const data = loadData();
+    const rec = calculateNextWeight(name, data);
+    const arr = [];
+    for (let i = 0; i < sets; i++) {
+      const prev = previousSet(name, i, data);
+      arr.push({ weight: rec !== null ? rec : (prev ? prev.weight : ''), reps: prev ? prev.reps : repsMin, done: false });
+    }
+    session.exercises.push({ exId: null, name, tag: ALTERNATIVES[name] ? '' : 'Eigene Übung', repsMin, repsMax, restSec: data.settings.restDefault || 90, note: '', rpe: 7, skipped: false, alternative: null, sets: arr });
+    closeExModal();
+    renderActiveWorkout();
+    showToast(`✓ „${name}" hinzugefügt`, '#c42e86');
+    return;
+  }
+
+  // mode 'routine'
   const data = loadData();
   const r = getRoutine(data, editorRoutineId);
   if (!r) return;
-  r.exercises.push({
-    id: uid('e'),
-    name,
-    tag: ALTERNATIVES[name] ? '' : 'Eigene Übung',
-    sets:    Math.max(1, parseInt(document.getElementById('ex-sets').value) || 3),
-    repsMin: Math.max(1, parseInt(document.getElementById('ex-rmin').value) || 10),
-    repsMax: Math.max(1, parseInt(document.getElementById('ex-rmax').value) || 12),
-  });
+  r.exercises.push({ id: uid('e'), name, tag: ALTERNATIVES[name] ? '' : 'Eigene Übung', sets, repsMin, repsMax, restSec: data.settings.restDefault || 90 });
   saveData(data);
   closeExModal();
   renderPlanEditor();
@@ -537,7 +639,7 @@ function startWorkout(routineId) {
           done:   false,
         });
       }
-      return { name: ex.name, tag: ex.tag, repsMin: ex.repsMin, repsMax: ex.repsMax, rpe: 7, skipped: false, alternative: null, sets };
+      return { exId: ex.id, name: ex.name, tag: ex.tag, repsMin: ex.repsMin, repsMax: ex.repsMax, restSec: ex.restSec || (data.settings.restDefault || 90), note: '', rpe: 7, skipped: false, alternative: null, sets };
     }),
   };
   startSessionTimer();
@@ -566,6 +668,9 @@ function renderActiveWorkout() {
     const card = document.createElement('div');
     card.className = 'exercise-entry workout-ex' + (ex.skipped ? ' skipped' : '');
 
+    const restLine = ex.restSec > 0
+      ? `<div class="rest-line"><span>⏱ ${formatRest(ex.restSec)}</span></div>` : '';
+
     const rows = ex.sets.map((set, si) => {
       const prev = previousSet(ex.name, si, data);
       const prevTxt = prev ? `${prev.weight}kg × ${prev.reps}` : '—';
@@ -583,17 +688,20 @@ function renderActiveWorkout() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
             </button>
           </div>
-        </div>`;
+        </div>${restLine}`;
     }).join('');
 
     card.innerHTML = `
       <div class="ex-header">
         <div class="ex-info">
-          <h3>${escapeHtml(ex.name)}</h3>
+          <h3>${escapeHtml(ex.name)}${ex.alternative ? ' <span class="custom-tag">Alt</span>' : ''}</h3>
           <p>Ziel: ${ex.repsMin}–${ex.repsMax} Wdh.${ex.tag ? ' · ' + escapeHtml(ex.tag) : ''}</p>
         </div>
-        <button class="btn-skip mini" onclick="openAltModal(${ei},'${escapeHtml(ex.name).replace(/'/g, "\\'")}')">Nicht machbar</button>
+        <button class="ex-menu-btn" onclick="openExMenu(${ei})" aria-label="Übungs-Menü">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+        </button>
       </div>
+      ${ex.note ? `<div class="ex-note">📝 ${escapeHtml(ex.note)}</div>` : ''}
       <div class="set-head"><span>Satz</span><span>Letztes&nbsp;Mal</span><span>kg</span><span>Wdh</span><span></span></div>
       <div class="set-rows">${rows}</div>
       <button class="btn-add-set" onclick="addSet(${ei})">+ Satz</button>
@@ -606,7 +714,77 @@ function renderActiveWorkout() {
     body.appendChild(card);
   });
 
+  // "+ Übung hinzufügen" am Ende der Session
+  const addEx = document.createElement('button');
+  addEx.className = 'btn-add-ex';
+  addEx.textContent = '+ Übung hinzufügen';
+  addEx.onclick = () => openExModal('sessionAdd');
+  body.appendChild(addEx);
+
   attachSetSwipe();
+}
+
+// ─── Übungs-Menü („…") im aktiven Workout ─────────────────────────────────────
+
+let exMenuTarget = null;
+
+function openExMenu(ei) {
+  if (!session) return;
+  exMenuTarget = ei;
+  const ex = session.exercises[ei];
+  document.getElementById('exmenu-title').textContent = ex.name;
+  document.getElementById('exmenu-modal').classList.add('open');
+}
+function closeExMenu() { document.getElementById('exmenu-modal').classList.remove('open'); exMenuTarget = null; }
+
+function menuReplace() {
+  const ei = exMenuTarget; closeExMenu();
+  openExModal('sessionReplace', ei);
+}
+function menuAlternative() {
+  const ei = exMenuTarget; closeExMenu();
+  openAltModal(ei, session.exercises[ei].name);
+}
+function menuNote() {
+  const ei = exMenuTarget;
+  const ex = session.exercises[ei];
+  closeExMenu();
+  const note = prompt('Notiz zur Übung:', ex.note || '');
+  if (note === null) return;
+  ex.note = note.trim();
+  renderActiveWorkout();
+}
+function menuRemove() {
+  const ei = exMenuTarget; closeExMenu();
+  if (!confirm(`„${session.exercises[ei].name}" aus diesem Training entfernen?`)) return;
+  session.exercises.splice(ei, 1);
+  renderActiveWorkout();
+}
+function menuRest() {
+  // wechselt zum Pausenzeit-Auswahl-Sheet
+  document.getElementById('exmenu-modal').classList.remove('open');
+  const ex = session.exercises[exMenuTarget];
+  document.getElementById('rest-sheet-title').textContent = `Pause · ${ex.name}`;
+  document.querySelectorAll('#rest-sheet .rest-opt').forEach(b =>
+    b.classList.toggle('sel', parseInt(b.dataset.sec) === ex.restSec));
+  document.getElementById('rest-sheet').classList.add('open');
+}
+function closeRestSheet() { document.getElementById('rest-sheet').classList.remove('open'); }
+
+function setExerciseRest(sec) {
+  if (exMenuTarget === null || !session) { closeRestSheet(); return; }
+  const ex = session.exercises[exMenuTarget];
+  ex.restSec = sec;
+  // dauerhaft in der Routine merken (falls aus Routine gestartet)
+  if (session.routineId && ex.exId) {
+    const data = loadData();
+    const r = getRoutine(data, session.routineId);
+    const re = r?.exercises.find(e => e.id === ex.exId);
+    if (re) { re.restSec = sec; saveData(data); }
+  }
+  closeRestSheet();
+  exMenuTarget = null;
+  renderActiveWorkout();
 }
 
 // Satz-Zeilen: nach links wischen → roter „Löschen"-Button
@@ -678,11 +856,12 @@ function setVal(ei, si, field, value) {
 
 function toggleSet(ei, si) {
   if (!session) return;
-  const set = session.exercises[ei].sets[si];
+  const ex = session.exercises[ei];
+  const set = ex.sets[si];
   set.done = !set.done;
   const row = document.getElementById(`set-${ei}-${si}`);
   if (row) row.classList.toggle('done', set.done);
-  if (set.done) startRest();
+  if (set.done && ex.restSec > 0) startRest(ex.restSec);
 }
 
 function addSet(ei) {
@@ -698,9 +877,9 @@ function finishWorkout() {
   const data = loadData();
   const exercises = [];
   session.exercises.forEach(ex => {
-    if (ex.skipped) { exercises.push({ name: ex.name, tag: ex.tag, skipped: true, alternative: ex.alternative, sets: [] }); return; }
+    if (ex.skipped) { exercises.push({ name: ex.name, tag: ex.tag, skipped: true, alternative: ex.alternative, note: ex.note || '', sets: [] }); return; }
     const doneSets = ex.sets.filter(s => s.done).map(s => ({ weight: s.weight || 0, reps: s.reps || 0, rpe: ex.rpe }));
-    if (doneSets.length) exercises.push({ name: ex.name, tag: ex.tag, skipped: false, alternative: ex.alternative, sets: doneSets });
+    if (doneSets.length) exercises.push({ name: ex.name, tag: ex.tag, skipped: false, alternative: ex.alternative, note: ex.note || '', sets: doneSets });
   });
 
   if (!exercises.some(e => !e.skipped && e.sets.length)) {
@@ -733,6 +912,14 @@ function cancelWorkout() {
   clearInterval(window._sessTimer);
   stopRest(false);
   showTrainingView('list');
+}
+
+// Leeres Workout ohne Plan starten — Übungen werden während des Trainings hinzugefügt
+function startEmptyWorkout() {
+  session = { routineId: null, routineName: 'Freies Training', startTs: Date.now(), exercises: [] };
+  startSessionTimer();
+  showTrainingView('workout');
+  openExModal('sessionAdd');
 }
 
 // ── Alternativen-Modal ──
@@ -771,9 +958,8 @@ function closeAltModal() { document.getElementById('alt-modal').classList.remove
 
 let rest = { id: null, remaining: 0 };
 
-function startRest() {
-  const data = loadData();
-  rest.remaining = data.settings.restDefault || 90;
+function startRest(sec) {
+  rest.remaining = sec || loadData().settings.restDefault || 90;
   document.getElementById('rest-timer').classList.add('show');
   updateRestBar();
   clearInterval(rest.id);
@@ -1015,6 +1201,7 @@ function initFirebase() {
       try {
         if (active === 'page-dashboard') renderDashboard();
         if (active === 'page-stats') renderStats();
+        if (active === 'page-history') renderHistory();
         if (active === 'page-training' && trainingView === 'list') renderRoutineList();
       } catch (e) {}
       setSyncStatus('ok');

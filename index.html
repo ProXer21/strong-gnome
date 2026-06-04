@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=6" />
+  <link rel="stylesheet" href="./style.css?v=7" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -59,6 +59,40 @@
       <label>bis<input type="number" id="ex-rmax" min="1" max="50" value="12" inputmode="numeric"></label>
     </div>
     <button class="save-workout-btn" onclick="confirmAddExercise()">Hinzufügen</button>
+  </div>
+</div>
+
+<!-- ─── Übungs-Menü (…) ────────────────────────────────────────────────── -->
+<div id="exmenu-modal" class="modal-overlay" onclick="if(event.target===this)closeExMenu()">
+  <div class="modal">
+    <h3 id="exmenu-title">Übung</h3>
+    <div class="menu-list">
+      <button class="menu-item" onclick="menuReplace()">🔁 Übung ersetzen</button>
+      <button class="menu-item" onclick="menuAlternative()">↔️ Alternative wählen</button>
+      <button class="menu-item" onclick="menuRest()">⏱️ Pausenzeit ändern</button>
+      <button class="menu-item" onclick="menuNote()">📝 Notiz hinzufügen</button>
+      <button class="menu-item danger" onclick="menuRemove()">🗑️ Übung entfernen</button>
+    </div>
+    <button class="btn-skip-all" onclick="closeExMenu()">Abbrechen</button>
+  </div>
+</div>
+
+<!-- ─── Pausenzeit-Auswahl ─────────────────────────────────────────────── -->
+<div id="rest-sheet" class="modal-overlay" onclick="if(event.target===this)closeRestSheet()">
+  <div class="modal">
+    <h3 id="rest-sheet-title">Pausenzeit</h3>
+    <p>Wie lange Pause nach jedem Satz?</p>
+    <div class="rest-opts">
+      <button class="rest-opt" data-sec="0"   onclick="setExerciseRest(0)">Aus</button>
+      <button class="rest-opt" data-sec="30"  onclick="setExerciseRest(30)">0:30</button>
+      <button class="rest-opt" data-sec="60"  onclick="setExerciseRest(60)">1:00</button>
+      <button class="rest-opt" data-sec="90"  onclick="setExerciseRest(90)">1:30</button>
+      <button class="rest-opt" data-sec="120" onclick="setExerciseRest(120)">2:00</button>
+      <button class="rest-opt" data-sec="150" onclick="setExerciseRest(150)">2:30</button>
+      <button class="rest-opt" data-sec="180" onclick="setExerciseRest(180)">3:00</button>
+      <button class="rest-opt" data-sec="240" onclick="setExerciseRest(240)">4:00</button>
+    </div>
+    <button class="btn-skip-all" onclick="closeRestSheet()">Abbrechen</button>
   </div>
 </div>
 
@@ -165,6 +199,8 @@
       <h1>Pläne</h1>
       <p>Wähle eine Routine zum Starten oder Bearbeiten</p>
     </div>
+    <button class="btn-quickstart" onclick="startEmptyWorkout()">⚡ Leeres Workout starten</button>
+    <div class="section-label">Meine Routinen</div>
     <div id="routine-list"></div>
     <button class="btn-add-ex" onclick="createRoutine()">+ Neue Routine</button>
   </div>
@@ -335,6 +371,15 @@
   </div>
 </section>
 
+<!-- ─── Verlauf ───────────────────────────────────────────────────────── -->
+<section id="page-history" class="page">
+  <div class="page-header">
+    <h1>Verlauf</h1>
+    <p>Deine vergangenen Workouts</p>
+  </div>
+  <div id="history-list"></div>
+</section>
+
 <!-- ─── Navigation ────────────────────────────────────────────────────── -->
 <nav>
   <button class="nav-btn active" data-page="dashboard" aria-label="Start">
@@ -349,20 +394,26 @@
     </span>
     <span>Training</span>
   </button>
+  <button class="nav-btn" data-page="history" aria-label="Verlauf">
+    <span class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+    </span>
+    <span>Verlauf</span>
+  </button>
   <button class="nav-btn" data-page="checkin" aria-label="Einchecken">
     <span class="icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
     </span>
-    <span>Einchecken</span>
+    <span>Check-in</span>
   </button>
   <button class="nav-btn" data-page="stats" aria-label="Statistiken">
     <span class="icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>
     </span>
-    <span>Statistiken</span>
+    <span>Statistik</span>
   </button>
 </nav>
 
-<script src="./app.js?v=6"></script>
+<script src="./app.js?v=7"></script>
 </body>
 </html>
