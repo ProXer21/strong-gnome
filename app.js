@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v30';
+const APP_VERSION = 'v31';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -350,6 +350,7 @@ function navigate(pageId) {
   if (pageId === 'checkin')   renderCheckin();
   if (pageId === 'stats')     renderStats();
   if (pageId === 'profile')   renderProfile();
+  if (pageId === 'friends')   renderFriends();
 }
 
 // ─── Verlauf ──────────────────────────────────────────────────────────────────
@@ -1110,6 +1111,7 @@ function finishWorkout() {
   session = null;
   clearInterval(window._sessTimer);
   stopRest(false);
+  syncPublicProfile();   // letztes Training / Fortschritt für Freunde aktualisieren
   showToast('🎉 Training gespeichert!');
   setTimeout(() => navigate('dashboard'), 1200);
 }
@@ -1383,6 +1385,7 @@ function saveProfile() {
   if (sd) data.profile.startDate = sd;
   if (gd) data.profile.goalDate = gd;
   saveData(data);
+  syncPublicProfile();
   renderProfile();
   showToast('✓ Profil gespeichert!');
 }
@@ -1598,6 +1601,8 @@ function attachUserDoc(user) {
     }
     setSyncStatus('ok');
     startUserListener();
+    syncPublicProfile();        // öffentliches Profil aktuell halten
+    startSocialListeners();     // Freundes-Anfragen/Posteingang live
     routeAfterAuth(user);
   }).catch(() => { setSyncStatus('offline'); routeAfterAuth(user); });
 }
@@ -1630,6 +1635,260 @@ function maybeMigrateLegacy() {
   localStorage.setItem('legacyMigrated', '1');
   if (window._fbRef) window._fbRef.set(legacy).catch(() => {});
   showToast('Deine bisherigen Daten wurden übernommen 💜', '#c42e86');
+}
+
+// ─── Social: Freunde & Plan-Teilen ───────────────────────────────────────────
+// Benötigt eingeloggtes Cloud-Konto + die erweiterten Firestore-Regeln.
+
+function fsdb() { return (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null; }
+function socialAvailable() { return !!(fsdb() && currentUid); }
+
+let friendsCache = [], incomingCache = [], planReqCache = [], inboxCache = [];
+
+// Öffentliches Profil (Name, Code, letztes Training, Fortschritt, Plan-Namen) spiegeln.
+// Bewusst OHNE Gewicht/Maße — die bleiben privat.
+function syncPublicProfile() {
+  if (!socialAvailable()) return;
+  const data = loadData();
+  const lastWorkout = data.workouts.length ? data.workouts[data.workouts.length - 1].date : null;
+  const ms = new Date(); ms.setDate(1);
+  const monthStart = ms.toISOString().slice(0, 10);
+  const workoutsThisMonth = data.workouts.filter(w => w.date >= monthStart).length;
+  const plans = (data.routines || []).map(r => ({ id: r.id, name: r.name, emoji: r.emoji || '🏋️', count: (r.exercises || []).length }));
+  fsdb().collection('users').doc(currentUid).set({
+    name: pName(data), friendCode: ensureFriendCode(data),
+    lastWorkout, workoutsThisMonth, plans, updatedAt: Date.now(),
+  }, { merge: true }).catch(() => {});
+}
+
+// Echtzeit-Listener für Anfragen / Posteingang → Badge + Live-Update der Seite
+function startSocialListeners() {
+  if (!socialAvailable()) return;
+  if (window._socUnsub) { window._socUnsub.forEach(u => { try { u(); } catch (e) {} }); }
+  const me = fsdb().collection('users').doc(currentUid);
+  const subs = [];
+  const onErr = () => {};
+  const refresh = () => { updateSocialBadge(); if (document.getElementById('page-friends')?.classList.contains('active')) drawSocial(); };
+  subs.push(me.collection('incoming').onSnapshot(s => { incomingCache = s.docs.map(d => ({ id: d.id, ...d.data() })); refresh(); }, onErr));
+  subs.push(me.collection('planRequests').onSnapshot(s => { planReqCache = s.docs.map(d => ({ id: d.id, ...d.data() })); refresh(); }, onErr));
+  subs.push(me.collection('inbox').onSnapshot(s => { inboxCache = s.docs.map(d => ({ id: d.id, ...d.data() })); refresh(); }, onErr));
+  subs.push(me.collection('friends').onSnapshot(async s => { await hydrateFriends(s.docs.map(d => ({ uid: d.id, ...d.data() }))); refresh(); }, onErr));
+  window._socUnsub = subs;
+}
+
+async function hydrateFriends(basic) {
+  const db = fsdb(); if (!db) { friendsCache = basic; return; }
+  friendsCache = await Promise.all(basic.map(async f => {
+    try { const p = await db.collection('users').doc(f.uid).get(); const d = p.exists ? p.data() : {}; return { uid: f.uid, name: d.name || f.name, lastWorkout: d.lastWorkout || null, workoutsThisMonth: d.workoutsThisMonth || 0, plans: d.plans || [] }; }
+    catch (e) { return { uid: f.uid, name: f.name }; }
+  }));
+}
+
+function updateSocialBadge() {
+  const n = incomingCache.length + planReqCache.length + inboxCache.length;
+  document.querySelectorAll('.social-badge').forEach(b => { b.textContent = n; b.style.display = n ? 'grid' : 'none'; });
+}
+
+function renderFriends() {
+  const data = loadData();
+  const mc = document.getElementById('fr-mycode'); if (mc) mc.textContent = ensureFriendCode(data);
+  if (!socialAvailable()) {
+    document.getElementById('friends-body').innerHTML =
+      '<div class="empty-state"><div class="es-icon">☁️</div><p>Freunde funktionieren nur mit einem Cloud-Konto.<br>Bitte melde dich an.</p></div>';
+    return;
+  }
+  document.getElementById('friends-body').innerHTML = '<div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div>';
+  loadSocial().then(drawSocial);
+}
+
+async function loadSocial() {
+  if (!socialAvailable()) return;
+  const me = fsdb().collection('users').doc(currentUid);
+  try {
+    const [inc, fr, pr, ib] = await Promise.all([
+      me.collection('incoming').get(), me.collection('friends').get(),
+      me.collection('planRequests').get(), me.collection('inbox').get(),
+    ]);
+    incomingCache = inc.docs.map(d => ({ id: d.id, ...d.data() }));
+    planReqCache  = pr.docs.map(d => ({ id: d.id, ...d.data() }));
+    inboxCache    = ib.docs.map(d => ({ id: d.id, ...d.data() }));
+    await hydrateFriends(fr.docs.map(d => ({ uid: d.id, ...d.data() })));
+    updateSocialBadge();
+  } catch (e) {
+    document.getElementById('friends-body').innerHTML =
+      '<div class="empty-state"><div class="es-icon">⚠️</div><p>Konnte Freunde nicht laden.<br>Sind die Firebase-Regeln schon aktiv?</p></div>';
+    throw e;
+  }
+}
+
+function fmtLastWorkout(date) {
+  if (!date) return 'noch kein Training';
+  try {
+    const days = Math.floor((new Date(today()) - new Date(date)) / 86400000);
+    if (days <= 0) return 'heute trainiert';
+    if (days === 1) return 'gestern trainiert';
+    return `vor ${days} Tagen`;
+  } catch (e) { return date; }
+}
+
+function drawSocial() {
+  const body = document.getElementById('friends-body');
+  if (!body) return;
+  let html = '';
+
+  // Eingehende Freundschaftsanfragen
+  if (incomingCache.length) {
+    html += '<div class="section-label">Freundschaftsanfragen</div>';
+    incomingCache.forEach(r => {
+      html += `<div class="social-card">
+        <div class="sc-info"><h3>${escapeHtml(r.fromName || '?')}</h3><p>möchte sich verbinden</p></div>
+        <div class="sc-actions">
+          <button class="sc-accept" onclick="acceptFriend('${r.fromUid}','${escapeHtml(r.fromName || '')}')">Annehmen</button>
+          <button class="sc-decline" onclick="declineFriend('${r.fromUid}')">✕</button>
+        </div></div>`;
+    });
+  }
+
+  // Eingehende Plan-Anfragen (jemand will MEINEN Plan)
+  if (planReqCache.length) {
+    html += '<div class="section-label">Plan-Anfragen</div>';
+    planReqCache.forEach(r => {
+      html += `<div class="social-card">
+        <div class="sc-info"><h3>${escapeHtml(r.fromName || '?')}</h3><p>möchte „${escapeHtml(r.planName || 'Plan')}"</p></div>
+        <div class="sc-actions">
+          <button class="sc-accept" onclick='approvePlanRequest(${JSON.stringify(r).replace(/'/g, "&#39;")})'>Senden</button>
+          <button class="sc-decline" onclick="declinePlanRequest('${r.id}')">✕</button>
+        </div></div>`;
+    });
+  }
+
+  // Posteingang (Pläne, die mir gesendet wurden)
+  if (inboxCache.length) {
+    html += '<div class="section-label">Posteingang</div>';
+    inboxCache.forEach(it => {
+      html += `<div class="social-card">
+        <div class="sc-info"><h3>${escapeHtml(it.plan?.name || 'Plan')}</h3><p>von ${escapeHtml(it.fromName || '?')}</p></div>
+        <div class="sc-actions">
+          <button class="sc-accept" onclick='acceptInboxPlan(${JSON.stringify(it).replace(/'/g, "&#39;")})'>Übernehmen</button>
+          <button class="sc-decline" onclick="dismissInbox('${it.id}')">✕</button>
+        </div></div>`;
+    });
+  }
+
+  // Freundesliste
+  html += '<div class="section-label">Meine Freunde</div>';
+  if (!friendsCache.length) {
+    html += '<div class="empty-state"><div class="es-icon">🤝</div><p>Noch keine Freunde. Verbinde dich über den Code oben!</p></div>';
+  } else {
+    friendsCache.forEach(f => {
+      const plans = (f.plans || []).map(p =>
+        `<div class="fp-row"><span>${escapeHtml(p.emoji || '🏋️')} ${escapeHtml(p.name)} <em>· ${p.count} Übungen</em></span>
+          <button class="fp-req" onclick="requestPlan('${f.uid}','${p.id}','${escapeHtml(p.name)}')">Anfragen</button></div>`).join('')
+        || '<p class="fp-empty">Keine Pläne geteilt.</p>';
+      html += `<div class="friend-card">
+        <div class="fc-head">
+          <div class="fc-avatar">${escapeHtml((f.name || '?').trim()[0] || '?').toUpperCase()}</div>
+          <div class="fc-info">
+            <h3>${escapeHtml(f.name || 'Freund')}</h3>
+            <p>${fmtLastWorkout(f.lastWorkout)} · ${f.workoutsThisMonth || 0} Trainings diesen Monat</p>
+          </div>
+        </div>
+        <div class="fc-plans"><div class="fp-title">Trainingspläne</div>${plans}</div>
+      </div>`;
+    });
+  }
+
+  body.innerHTML = html;
+}
+
+async function sendFriendByCode() {
+  if (!socialAvailable()) { showToast('Bitte zuerst anmelden', '#c46a04'); return; }
+  const code = (val('friend-code-input') || '').toUpperCase().trim();
+  if (!code) { showToast('Bitte einen Code eingeben', '#c46a04'); return; }
+  const data = loadData();
+  if (code === ensureFriendCode(data)) { showToast('Das ist dein eigener Code 🙂', '#c46a04'); return; }
+  try {
+    const snap = await fsdb().collection('users').where('friendCode', '==', code).limit(1).get();
+    if (snap.empty) { showToast('Kein Nutzer mit diesem Code', '#c0392b'); return; }
+    const toUid = snap.docs[0].id;
+    if (toUid === currentUid) { showToast('Das ist dein eigener Code 🙂', '#c46a04'); return; }
+    await fsdb().collection('users').doc(toUid).collection('incoming').doc(currentUid).set({
+      fromUid: currentUid, fromName: pName(data), fromCode: ensureFriendCode(data), ts: Date.now(),
+    });
+    document.getElementById('friend-code-input').value = '';
+    showToast('✓ Anfrage gesendet!');
+  } catch (e) { showToast('Fehler beim Senden', '#c0392b'); }
+}
+
+async function acceptFriend(fromUid, fromName) {
+  if (!socialAvailable()) return;
+  const myName = pName(loadData());
+  try {
+    await fsdb().collection('users').doc(currentUid).collection('friends').doc(fromUid).set({ uid: fromUid, name: fromName, ts: Date.now() });
+    await fsdb().collection('users').doc(fromUid).collection('friends').doc(currentUid).set({ uid: currentUid, name: myName, ts: Date.now() });
+    await fsdb().collection('users').doc(currentUid).collection('incoming').doc(fromUid).delete();
+    showToast('✓ Freund hinzugefügt!');
+    renderFriends();
+  } catch (e) { showToast('Fehler', '#c0392b'); }
+}
+
+async function declineFriend(fromUid) {
+  if (!socialAvailable()) return;
+  try { await fsdb().collection('users').doc(currentUid).collection('incoming').doc(fromUid).delete(); renderFriends(); } catch (e) {}
+}
+
+// Plan beim Besitzer anfragen (Kopieren erst nach dessen Bestätigung)
+async function requestPlan(ownerUid, planId, planName) {
+  if (!socialAvailable()) return;
+  const data = loadData();
+  try {
+    await fsdb().collection('users').doc(ownerUid).collection('planRequests').add({
+      fromUid: currentUid, fromName: pName(data), planId, planName, ts: Date.now(),
+    });
+    showToast('✓ Anfrage gesendet — warte auf Bestätigung');
+  } catch (e) { showToast('Fehler beim Anfragen', '#c0392b'); }
+}
+
+// Besitzer bestätigt → sendet den vollständigen Plan in den Posteingang des Anfragers
+async function approvePlanRequest(req) {
+  if (!socialAvailable()) return;
+  const data = loadData();
+  const r = (data.routines || []).find(x => x.id === req.planId);
+  if (!r) { showToast('Plan nicht mehr vorhanden', '#c46a04'); declinePlanRequest(req.id); return; }
+  const planCopy = { name: r.name, emoji: r.emoji || '🏋️', exercises: (r.exercises || []).map(e => ({ name: e.name, tag: e.tag || '', sets: e.sets, repsMin: e.repsMin, repsMax: e.repsMax, restSec: e.restSec || 90 })) };
+  try {
+    await fsdb().collection('users').doc(req.fromUid).collection('inbox').add({
+      type: 'plan', fromUid: currentUid, fromName: pName(data), plan: planCopy, ts: Date.now(),
+    });
+    await fsdb().collection('users').doc(currentUid).collection('planRequests').doc(req.id).delete();
+    showToast('✓ Plan gesendet!');
+    renderFriends();
+  } catch (e) { showToast('Fehler beim Senden', '#c0392b'); }
+}
+
+async function declinePlanRequest(id) {
+  if (!socialAvailable()) return;
+  try { await fsdb().collection('users').doc(currentUid).collection('planRequests').doc(id).delete(); renderFriends(); } catch (e) {}
+}
+
+// Gesendeten Plan in die eigenen Routinen übernehmen
+function acceptInboxPlan(item) {
+  const data = loadData();
+  const p = item.plan || {};
+  data.routines.push({
+    id: uid('r'), name: (p.name || 'Plan') + ' (von ' + (item.fromName || 'Freund') + ')', emoji: p.emoji || '🏋️',
+    exercises: (p.exercises || []).map(e => ({ id: uid('e'), name: e.name, tag: e.tag || '', sets: e.sets || 3, repsMin: e.repsMin || 10, repsMax: e.repsMax || 12, restSec: e.restSec || 90 })),
+  });
+  saveData(data);
+  syncPublicProfile();
+  if (socialAvailable()) fsdb().collection('users').doc(currentUid).collection('inbox').doc(item.id).delete().catch(() => {});
+  showToast('✓ Plan übernommen!');
+  renderFriends();
+}
+
+function dismissInbox(id) {
+  if (!socialAvailable()) return;
+  try { fsdb().collection('users').doc(currentUid).collection('inbox').doc(id).delete().then(renderFriends); } catch (e) {}
 }
 
 // ─── Auth-UI / Routing ──────────────────────────────────────────────────────

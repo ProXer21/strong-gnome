@@ -33,7 +33,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=25" />
+  <link rel="stylesheet" href="./style.css?v=26" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -253,8 +253,9 @@
     <div class="header-actions">
       <button id="skin-toggle" class="icon-btn" aria-label="Maskulinen Stil aktivieren"></button>
       <button id="theme-toggle" class="icon-btn" aria-label="Hell/Dunkel umschalten"></button>
-      <button class="icon-btn" aria-label="Profil & Einstellungen" onclick="navigate('profile')">
+      <button class="icon-btn icon-btn-badged" aria-label="Profil & Einstellungen" onclick="navigate('profile')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+        <span class="social-badge social-badge-dot" style="display:none">0</span>
       </button>
       <span id="sync-status" title="Cloud-Sync"></span>
     </div>
@@ -525,14 +526,17 @@
     <p class="design-hint" style="text-align:left;margin:0">Voreingestellte Pause zwischen den Sätzen für neue Übungen.</p>
   </div>
 
-  <!-- Freunde (kommt bald) -->
+  <!-- Freunde -->
   <div class="checkin-section">
-    <h2>🤝 Dein Freundes-Code</h2>
+    <h2>🤝 Freunde</h2>
     <div class="friend-code-box">
       <span id="pf-friendcode" class="friend-code">—</span>
       <button class="btn-secondary" style="width:auto;padding:10px 16px" onclick="copyFriendCode()">Kopieren</button>
     </div>
-    <p class="design-hint" style="text-align:left;margin:8px 0 0">Teile diesen Code mit Freunden, um euch zu verbinden. <strong>Freunde &amp; Gruppentraining kommen bald.</strong></p>
+    <button class="save-workout-btn" style="margin-top:12px" onclick="navigate('friends')">
+      Freunde verwalten <span class="social-badge" style="display:none">0</span>
+    </button>
+    <p class="design-hint" style="text-align:left;margin:8px 0 0">Verbinde dich per Code, sieh das letzte Training deiner Freunde und teile Trainingspläne.</p>
   </div>
 
   <!-- Daten -->
@@ -561,6 +565,27 @@
   </div>
 
   <div class="app-version">FitnessTrainer</div>
+</section>
+
+<!-- ─── Freunde (Social) ──────────────────────────────────────────────── -->
+<section id="page-friends" class="page">
+  <div class="editor-bar">
+    <button class="btn-back" onclick="navigate('profile')" aria-label="Zurück">‹ Profil</button>
+    <h2>Freunde</h2>
+    <button class="btn-icon-text" onclick="renderFriends()" aria-label="Aktualisieren">⟳</button>
+  </div>
+
+  <!-- Verbinden -->
+  <div class="checkin-section">
+    <h2>🔗 Verbinden</h2>
+    <p class="design-hint" style="text-align:left;margin:0 0 10px">Dein Code: <strong id="fr-mycode" class="friend-code-inline">—</strong></p>
+    <div class="connect-row">
+      <input type="text" id="friend-code-input" class="modal-input" placeholder="Code des Freundes (z. B. ABC-123)" autocomplete="off" style="margin-bottom:0" />
+      <button class="btn-secondary" style="width:auto;padding:12px 18px" onclick="sendFriendByCode()">Hinzufügen</button>
+    </div>
+  </div>
+
+  <div id="friends-body"></div>
 </section>
 
 <!-- ─── Navigation ────────────────────────────────────────────────────── -->
@@ -597,6 +622,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=30"></script>
+<script src="./app.js?v=31"></script>
 </body>
 </html>

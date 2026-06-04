@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Private Nutzerdaten (Trainings, Gewicht, Maße) — nur der Besitzer
+    match /fitness/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Öffentliche Profile für das Freunde-Feature
+    // Enthält NUR: Name, Freundes-Code, letztes Training, Trainings/Monat, Plan-Namen.
+    // KEIN Gewicht, KEINE Maße.
+    match /users/{uid} {
+      allow read:  if request.auth != null;                 // verbundene/auth. Nutzer dürfen lesen
+      allow write: if request.auth != null && request.auth.uid == uid;
+
+      // Eingehende Freundschaftsanfragen: Absender legt an, Empfänger liest/löscht
+      match /incoming/{fromUid} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        allow create:       if request.auth != null && request.auth.uid == fromUid;
+      }
+
+      // Bestätigte Freunde: Besitzer ODER der jeweilige Freund darf schreiben
+      match /friends/{friendUid} {
+        allow read:  if request.auth != null && request.auth.uid == uid;
+        allow write: if request.auth != null && (request.auth.uid == uid || request.auth.uid == friendUid);
+      }
+
+      // Plan-Anfragen an den Besitzer: jeder Auth. darf anfragen, Besitzer liest/löscht
+      match /planRequests/{reqId} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        allow create:       if request.auth != null;
+      }
+
+      // Posteingang (zugeschickte Pläne): jeder Auth. darf zustellen, Besitzer liest/löscht
+      match /inbox/{itemId} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        allow create:       if request.auth != null;
+      }
+    }
+  }
+}
