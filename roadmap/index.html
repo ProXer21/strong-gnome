@@ -26,6 +26,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
+  html,body{overflow-x:hidden;max-width:100%}
   body{
     font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     color:var(--text); background:
@@ -202,9 +203,32 @@
   .stamp{margin-top:14px;font-size:12px;color:var(--muted)} .stamp b{color:var(--text)}
 
   @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-  @media (max-width:1000px){.board,.flow{grid-template-columns:1fr}.nums{grid-template-columns:repeat(3,1fr)}
-    .timeline{grid-template-columns:repeat(2,1fr)}.timeline::before{display:none}.ms{padding-top:0;padding-left:30px}
-    .ms .node{top:3px} .arrow{transform:rotate(90deg)}}
+  /* Tablet */
+  @media (max-width:1000px){
+    .board,.flow{grid-template-columns:1fr}
+    .nums{grid-template-columns:repeat(3,1fr)}
+    .timeline{grid-template-columns:repeat(2,1fr)}
+    .timeline::before{display:none}
+    .arrow{transform:rotate(90deg)}
+  }
+  /* Handy: vertikale Timeline + gestapelte Kacheln, nichts wird abgeschnitten */
+  @media (max-width:760px){
+    .wrap{width:100%;padding:0 16px}
+    header{padding:34px 0 4px}
+    .titles h1{font-size:30px}
+    .stats{grid-template-columns:1fr}
+    .nums{grid-template-columns:repeat(2,1fr)}
+    .live-grid{grid-template-columns:1fr}
+    .journey{padding:22px 16px 26px;border-radius:20px}
+    .journey-head{margin-bottom:20px}
+    .timeline{grid-template-columns:1fr;gap:0;position:relative}
+    .timeline::before{display:block;left:13px;right:auto;top:6px;bottom:6px;width:3px;height:auto;
+      background:linear-gradient(180deg,var(--green),var(--blue),var(--pink))}
+    .ms{padding:0 0 18px 44px}
+    .ms:last-child{padding-bottom:0}
+    .ms .node{top:1px;left:0}
+    .ms-card{height:auto}
+  }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
