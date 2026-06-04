@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v14';
+const APP_VERSION = 'v15';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -1382,8 +1382,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const tt = document.getElementById('theme-toggle');
   if (tt) tt.addEventListener('click', toggleTheme);
 
-  const ver = document.getElementById('app-version');
-  if (ver) ver.textContent = `FitnessTrainer · ${APP_VERSION}`;
+  document.querySelectorAll('.app-version').forEach(el => { el.textContent = `FitnessTrainer · ${APP_VERSION}`; });
 
   initFirebase();
   navigate('dashboard');
