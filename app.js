@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v28';
+const APP_VERSION = 'v30';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -338,8 +338,10 @@ function toggleSkin() {
 function navigate(pageId) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('page-' + pageId).classList.add('active');
-  document.querySelector(`.nav-btn[data-page="${pageId}"]`).classList.add('active');
+  const page = document.getElementById('page-' + pageId);
+  if (page) page.classList.add('active');
+  const navBtn = document.querySelector(`.nav-btn[data-page="${pageId}"]`);
+  if (navBtn) navBtn.classList.add('active');   // Profil hat keinen Nav-Button
   window.scrollTo(0, 0);
 
   if (pageId === 'dashboard') renderDashboard();
@@ -347,6 +349,7 @@ function navigate(pageId) {
   if (pageId === 'history')   renderHistory();
   if (pageId === 'checkin')   renderCheckin();
   if (pageId === 'stats')     renderStats();
+  if (pageId === 'profile')   renderProfile();
 }
 
 // ─── Verlauf ──────────────────────────────────────────────────────────────────
@@ -1292,6 +1295,106 @@ function saveCheckin() {
   renderCheckin();
 }
 
+// ─── Profil & Einstellungen ─────────────────────────────────────────────────
+
+const REST_OPTIONS = [30, 60, 90, 120, 150, 180];
+const DESIGN_OPTIONS = [
+  { theme: 'light', name: 'Rosé hell',   cls: 'dp-rose' },
+  { theme: 'dark',  name: 'Rosé dunkel', cls: 'dp-rose-dark' },
+  { theme: 'masc',  name: 'Maskulin',    cls: 'dp-masc' },
+];
+
+// stabilen Freundes-Code erzeugen (3 Buchstaben + 3 Ziffern), einmalig speichern
+function ensureFriendCode(data) {
+  if (data.profile && data.profile.friendCode) return data.profile.friendCode;
+  const L = 'ABCDEFGHJKLMNPQRSTUVWXYZ', D = '0123456789';
+  let code = '';
+  for (let i = 0; i < 3; i++) code += L[Math.floor(Math.random() * L.length)];
+  code += '-';
+  for (let i = 0; i < 3; i++) code += D[Math.floor(Math.random() * D.length)];
+  if (!data.profile) data.profile = {};
+  data.profile.friendCode = code;
+  saveData(data);
+  return code;
+}
+
+function renderProfile() {
+  const data = loadData();
+  const u = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+
+  // Kopf
+  document.getElementById('profile-name').textContent = pName(data);
+  document.getElementById('profile-email').textContent = u ? u.email : 'lokaler Modus';
+  const av = document.getElementById('profile-avatar');
+  if (av) av.textContent = (pName(data).trim()[0] || '🙂').toUpperCase();
+
+  // Felder
+  document.getElementById('pf-name').value      = pName(data);
+  document.getElementById('pf-start').value     = pStartWeight(data);
+  document.getElementById('pf-goal').value       = pGoalWeight(data);
+  document.getElementById('pf-startdate').value = pStartDate(data);
+  document.getElementById('pf-goaldate').value  = pGoalDate(data);
+
+  // Design-Auswahl
+  const dp = document.getElementById('pf-design');
+  if (dp) dp.innerHTML = DESIGN_OPTIONS.map(o =>
+    `<button type="button" class="design-opt${data.settings.theme === o.theme ? ' sel' : ''}" onclick="setProfileTheme('${o.theme}')">
+       <span class="dp-swatch ${o.cls}"></span><span class="dp-name">${o.name}</span>
+     </button>`).join('');
+
+  // Pausenzeit
+  const rs = document.getElementById('pf-rest');
+  if (rs) rs.innerHTML = REST_OPTIONS.map(s =>
+    `<button type="button" class="freq-opt${data.settings.restDefault === s ? ' sel' : ''}" onclick="setProfileRest(${s})">${formatRest(s)}</button>`).join('');
+
+  // Freundes-Code
+  document.getElementById('pf-friendcode').textContent = ensureFriendCode(data);
+}
+
+function setProfileTheme(theme) {
+  const data = loadData();
+  data.settings.theme = theme;
+  if (theme !== 'masc') data.settings.femMode = theme;
+  saveData(data);
+  applyTheme(theme);
+  renderProfile();
+}
+
+function setProfileRest(sec) {
+  const data = loadData();
+  data.settings.restDefault = sec;
+  saveData(data);
+  renderProfile();
+}
+
+function saveProfile() {
+  const data = loadData();
+  const name = val('pf-name');
+  const sw = parseFloat(val('pf-start'));
+  const gw = parseFloat(val('pf-goal'));
+  const sd = val('pf-startdate');
+  const gd = val('pf-goaldate');
+  if (!name) { showToast('Bitte einen Namen eingeben', '#c46a04'); return; }
+  if (!sw || !gw) { showToast('Bitte Start- und Zielgewicht eingeben', '#c46a04'); return; }
+  if (!data.profile) data.profile = {};
+  data.profile.name = name;
+  data.profile.startWeight = sw;
+  data.profile.goalWeight = gw;
+  if (sd) data.profile.startDate = sd;
+  if (gd) data.profile.goalDate = gd;
+  saveData(data);
+  renderProfile();
+  showToast('✓ Profil gespeichert!');
+}
+
+function copyFriendCode() {
+  const code = document.getElementById('pf-friendcode').textContent;
+  const done = () => showToast('✓ Code kopiert: ' + code, '#0f9d72');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(done).catch(() => done());
+  } else { done(); }
+}
+
 // ─── Statistiken ──────────────────────────────────────────────────────────────
 
 let activeChart = 'weight';
@@ -1562,8 +1665,8 @@ function enterApp() {
   const u = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
   const ae = document.getElementById('account-email');
   if (ae) ae.textContent = u ? u.email : 'lokaler Modus';
-  const lo = document.getElementById('logout-card');
-  if (lo) lo.style.display = u ? 'block' : 'none';
+  const acc = document.getElementById('account-section');
+  if (acc) acc.style.display = u ? 'block' : 'none';
   navigate('dashboard');
 }
 

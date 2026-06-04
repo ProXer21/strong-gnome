@@ -33,7 +33,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=23" />
+  <link rel="stylesheet" href="./style.css?v=25" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -253,6 +253,9 @@
     <div class="header-actions">
       <button id="skin-toggle" class="icon-btn" aria-label="Maskulinen Stil aktivieren"></button>
       <button id="theme-toggle" class="icon-btn" aria-label="Hell/Dunkel umschalten"></button>
+      <button class="icon-btn" aria-label="Profil & Einstellungen" onclick="navigate('profile')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+      </button>
       <span id="sync-status" title="Cloud-Sync"></span>
     </div>
   </div>
@@ -384,25 +387,6 @@
 
   <button class="btn-save-checkin" onclick="saveCheckin()">Werte speichern</button>
 
-  <div style="margin-top:24px">
-    <div class="setup-card">
-      <h3>📤 Daten exportieren</h3>
-      <p>Exportiere deine Daten als JSON-Datei für das adaptive Analyse-Script oder zur Sicherung.</p>
-      <button class="btn-secondary" onclick="exportData()">Als JSON exportieren</button>
-    </div>
-    <div class="setup-card">
-      <h3>📥 Daten importieren</h3>
-      <p>Lade eine gespeicherte JSON-Datei wieder ein (z.B. nach Gerätewechsel).</p>
-      <button class="btn-secondary" onclick="document.getElementById('import-file').click()">JSON importieren</button>
-      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this.files[0])" />
-    </div>
-    <div class="setup-card" id="logout-card" style="display:none">
-      <h3>👤 Konto</h3>
-      <p>Angemeldet als <strong id="account-email">—</strong></p>
-      <button class="btn-danger" onclick="signOutUser()">Abmelden</button>
-    </div>
-  </div>
-
   <div class="app-version">FitnessTrainer</div>
 </section>
 
@@ -491,6 +475,94 @@
   <div id="history-list"></div>
 </section>
 
+<!-- ─── Profil & Einstellungen ────────────────────────────────────────── -->
+<section id="page-profile" class="page">
+  <div class="editor-bar">
+    <button class="btn-back" onclick="navigate('dashboard')" aria-label="Zurück">‹ Start</button>
+    <h2>Profil</h2>
+    <span style="width:40px"></span>
+  </div>
+
+  <!-- Profilkopf -->
+  <div class="profile-head">
+    <div class="profile-avatar" id="profile-avatar">🙂</div>
+    <div>
+      <div class="profile-name" id="profile-name">—</div>
+      <div class="profile-email" id="profile-email">—</div>
+    </div>
+  </div>
+
+  <!-- Persönliche Daten -->
+  <div class="checkin-section">
+    <h2>👤 Persönliche Daten</h2>
+    <div class="input-row">
+      <div class="input-field"><label>Name</label>
+        <input type="text" id="pf-name" placeholder="Dein Name" style="width:auto;flex:1;text-align:left" /></div>
+      <div class="input-field"><label>Startgewicht</label>
+        <input type="number" id="pf-start" inputmode="decimal" step="0.01" min="30" max="250" /><span class="unit">kg</span></div>
+      <div class="input-field"><label>Zielgewicht</label>
+        <input type="number" id="pf-goal" inputmode="decimal" step="0.01" min="30" max="250" /><span class="unit">kg</span></div>
+      <div class="input-field"><label>Startdatum</label>
+        <input type="date" id="pf-startdate" style="width:auto;flex:1;text-align:left" /></div>
+      <div class="input-field"><label>Zieldatum</label>
+        <input type="date" id="pf-goaldate" style="width:auto;flex:1;text-align:left" /></div>
+    </div>
+    <button class="btn-save-checkin" style="margin-top:14px" onclick="saveProfile()">Speichern</button>
+  </div>
+
+  <!-- Design -->
+  <div class="checkin-section">
+    <h2>🎨 Design</h2>
+    <div class="design-pick" id="pf-design"></div>
+  </div>
+
+  <!-- Training -->
+  <div class="checkin-section">
+    <div class="ci-head">
+      <h2>⏱️ Standard-Pausenzeit</h2>
+      <div class="freq-seg" id="pf-rest"></div>
+    </div>
+    <p class="design-hint" style="text-align:left;margin:0">Voreingestellte Pause zwischen den Sätzen für neue Übungen.</p>
+  </div>
+
+  <!-- Freunde (kommt bald) -->
+  <div class="checkin-section">
+    <h2>🤝 Dein Freundes-Code</h2>
+    <div class="friend-code-box">
+      <span id="pf-friendcode" class="friend-code">—</span>
+      <button class="btn-secondary" style="width:auto;padding:10px 16px" onclick="copyFriendCode()">Kopieren</button>
+    </div>
+    <p class="design-hint" style="text-align:left;margin:8px 0 0">Teile diesen Code mit Freunden, um euch zu verbinden. <strong>Freunde &amp; Gruppentraining kommen bald.</strong></p>
+  </div>
+
+  <!-- Daten -->
+  <div class="checkin-section">
+    <h2>💾 Daten</h2>
+    <div class="setup-card">
+      <h3>📤 Exportieren</h3>
+      <p>Sichere deine Daten als JSON-Datei.</p>
+      <button class="btn-secondary" onclick="exportData()">Als JSON exportieren</button>
+    </div>
+    <div class="setup-card">
+      <h3>📥 Importieren</h3>
+      <p>Lade eine gespeicherte JSON-Datei wieder ein.</p>
+      <button class="btn-secondary" onclick="document.getElementById('import-file').click()">JSON importieren</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this.files[0])" />
+    </div>
+  </div>
+
+  <!-- Konto -->
+  <div class="checkin-section" id="account-section">
+    <h2>🔑 Konto</h2>
+    <div class="setup-card">
+      <p>Angemeldet als <strong id="account-email">—</strong></p>
+      <button class="btn-danger" onclick="signOutUser()">Abmelden</button>
+    </div>
+  </div>
+
+  <div class="app-version">FitnessTrainer</div>
+</section>
+
 <!-- ─── Navigation ────────────────────────────────────────────────────── -->
 <nav>
   <button class="nav-btn active" data-page="dashboard" aria-label="Start">
@@ -525,6 +597,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=28"></script>
+<script src="./app.js?v=30"></script>
 </body>
 </html>
