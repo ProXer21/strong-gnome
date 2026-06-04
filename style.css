@@ -828,7 +828,7 @@ nav {
   border-radius: 99px;
   font-size: 14px;
   font-weight: 700;
-  z-index: 300;
+  z-index: 9999;
   transition: transform .35s cubic-bezier(.22,1,.36,1);
   white-space: nowrap;
   box-shadow: var(--shadow-lg);
