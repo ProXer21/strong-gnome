@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=19" />
+  <link rel="stylesheet" href="./style.css?v=20" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -270,33 +270,6 @@
     </div>
   </div>
 
-  <!-- Measurements -->
-  <div class="measure-row">
-    <div class="measure-card">
-      <div class="m-icon">🍑</div>
-      <div class="m-label">Hüfte / Po</div>
-      <div class="m-value" id="hip-value">—</div>
-      <div class="m-delta" id="hip-delta"></div>
-    </div>
-    <div class="measure-card">
-      <div class="m-icon">👗</div>
-      <div class="m-label">Taille</div>
-      <div class="m-value" id="waist-value">—</div>
-      <div class="m-delta" id="waist-delta"></div>
-    </div>
-    <div class="measure-card">
-      <div class="m-icon">💪</div>
-      <div class="m-label">Oberarm</div>
-      <div class="m-value" id="arm-value">—</div>
-      <div class="m-delta" id="arm-delta"></div>
-    </div>
-    <div class="measure-card" onclick="navigate('checkin')" style="cursor:pointer;border:2px dashed rgba(196,46,134,.35);box-shadow:none;background:transparent;">
-      <div class="m-icon">➕</div>
-      <div class="m-label" style="color:var(--primary-dark);font-weight:700">Einchecken</div>
-      <div class="m-value" style="font-size:13px;color:var(--text-muted)">Werte eintragen</div>
-    </div>
-  </div>
-
   <!-- Next workout -->
   <div class="next-workout">
     <div class="nw-label">Nächstes Training</div>
@@ -362,41 +335,31 @@
     <p>Deine Werte eintragen</p>
   </div>
 
-  <div class="info-box">
-    📅 <strong>Gewicht:</strong> Jeden Montag morgens, nüchtern, vor dem Frühstück.<br>
-    📏 <strong>Maße:</strong> 1x pro Monat mit Maßband — immer an der gleichen Stelle.
+  <div class="info-box" id="checkin-hint">
+    📅 <strong>Gewicht:</strong> einmal pro Woche, morgens nüchtern.<br>
+    📏 <strong>Maße:</strong> einmal im Monat — immer an der gleichen Stelle.
   </div>
 
   <div class="checkin-section">
-    <h2>⚖️ Gewicht (wöchentlich)</h2>
+    <div class="ci-head">
+      <h2 id="ci-weight-head">⚖️ Gewicht (wöchentlich)</h2>
+      <div class="freq-seg" id="freq-weight"></div>
+    </div>
     <div class="input-row">
       <div class="input-field">
         <label>Aktuelles Gewicht</label>
-        <input type="number" id="ci-weight" inputmode="decimal" step="0.1" min="40" max="200" placeholder="82.0" />
+        <input type="number" id="ci-weight" inputmode="decimal" step="0.1" min="30" max="250" placeholder="—" />
         <span class="unit">kg</span>
       </div>
     </div>
   </div>
 
   <div class="checkin-section">
-    <h2>📏 Körpermaße (monatlich)</h2>
-    <div class="input-row">
-      <div class="input-field">
-        <label>🍑 Hüfte / Po (breiteste Stelle)</label>
-        <input type="number" id="ci-hip" inputmode="decimal" step="0.5" min="50" max="200" placeholder="—" />
-        <span class="unit">cm</span>
-      </div>
-      <div class="input-field">
-        <label>👗 Taille (schmalste Stelle)</label>
-        <input type="number" id="ci-waist" inputmode="decimal" step="0.5" min="40" max="200" placeholder="—" />
-        <span class="unit">cm</span>
-      </div>
-      <div class="input-field">
-        <label>💪 Oberarm (entspannt, Mitte)</label>
-        <input type="number" id="ci-arm" inputmode="decimal" step="0.5" min="15" max="80" placeholder="—" />
-        <span class="unit">cm</span>
-      </div>
+    <div class="ci-head">
+      <h2 id="ci-measure-head">📏 Körpermaße (monatlich)</h2>
+      <div class="freq-seg" id="freq-measure"></div>
     </div>
+    <div class="input-row" id="measure-inputs"></div>
   </div>
 
   <button class="btn-save-checkin" onclick="saveCheckin()">Werte speichern</button>
@@ -542,6 +505,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=22"></script>
+<script src="./app.js?v=23"></script>
 </body>
 </html>

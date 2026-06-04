@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v22';
+const APP_VERSION = 'v23';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -12,38 +12,32 @@ const LEGACY = { name: 'Celina', startDate: '2026-06-02', goalDate: '2026-09-30'
 let currentUid = null;
 function storageKey() { return currentUid ? 'fitnessData_' + currentUid : 'fitnessData'; }
 
-// Standard-Routinen (Celinas Plan) — werden als bearbeitbare Vorlage angelegt
+// Standard-Plan für NEUE Nutzer: klassischer Push / Pull / Legs (3er-Split).
+// Wird beim ersten Mal als bearbeitbare Vorlage angelegt — kann frei geändert werden.
 const DEFAULT_ROUTINES = [
-  { id: 'r_po', name: 'Po & Beine', emoji: '🍑', exercises: [
-    { name: 'Hip Thrust',                   tag: 'Po Hauptübung',      sets: 4, repsMin: 10, repsMax: 12 },
-    { name: 'Rumänisches Kreuzheben (RDL)', tag: 'Po & Beinrückseite', sets: 4, repsMin: 10, repsMax: 12 },
-    { name: 'Einbeinige Beinpresse',        tag: 'Po & Quads',         sets: 3, repsMin: 10, repsMax: 12 },
-    { name: 'Abduktoren-Maschine',          tag: 'Po (seitlich)',      sets: 4, repsMin: 12, repsMax: 15 },
-    { name: 'Hyperextension',               tag: 'Po & unterer Rücken',sets: 3, repsMin: 12, repsMax: 15 },
+  { id: 'r_push', name: 'Push (Brust · Schultern · Trizeps)', emoji: '💪', exercises: [
+    { name: 'Bankdrücken (Langhantel)',     tag: 'Brust',     sets: 4, repsMin: 8,  repsMax: 12 },
+    { name: 'Schrägbankdrücken (Kurzhantel)',tag: 'obere Brust',sets: 3, repsMin: 10, repsMax: 12 },
+    { name: 'Schulterdrücken (Kurzhantel)', tag: 'Schultern', sets: 3, repsMin: 8,  repsMax: 12 },
+    { name: 'Seitheben',                    tag: 'Schultern', sets: 3, repsMin: 12, repsMax: 15 },
+    { name: 'Trizeps Pushdown',             tag: 'Trizeps',   sets: 3, repsMin: 12, repsMax: 15 },
+    { name: 'Trizeps Overhead Extension',   tag: 'Trizeps',   sets: 3, repsMin: 12, repsMax: 15 },
   ]},
-  { id: 'r_brust', name: 'Brust & Arme', emoji: '💪', exercises: [
-    { name: 'Brustpresse',                  tag: 'Brust',              sets: 4, repsMin: 10, repsMax: 12 },
-    { name: 'Butterfly',                    tag: 'Brust Isolierung',   sets: 3, repsMin: 12, repsMax: 15 },
-    { name: 'Schulterdrücken (Kurzhantel)', tag: 'Schultern',          sets: 3, repsMin: 10, repsMax: 12 },
-    { name: 'Seitheben',                    tag: 'Schultern Definition',sets: 3, repsMin: 12, repsMax: 15 },
-    { name: 'Trizeps Kabelzug (einarmig)',  tag: 'Arme Definition',    sets: 3, repsMin: 12, repsMax: 15 },
-    { name: 'Trizeps Pushdown',             tag: 'Arme Definition',    sets: 3, repsMin: 12, repsMax: 15 },
-    { name: 'Around the World',             tag: 'Schultern/Brust',    sets: 3, repsMin: 12, repsMax: 15 },
+  { id: 'r_pull', name: 'Pull (Rücken · Bizeps)', emoji: '🏋️', exercises: [
+    { name: 'Klimmzüge (assistiert)',       tag: 'Rücken (breit)', sets: 4, repsMin: 6,  repsMax: 10 },
+    { name: 'Langhantelrudern',             tag: 'Rücken (Mitte)', sets: 4, repsMin: 8,  repsMax: 12 },
+    { name: 'Latzug',                       tag: 'Rücken (breit)', sets: 3, repsMin: 10, repsMax: 12 },
+    { name: 'Face Pulls',                   tag: 'hintere Schulter',sets: 3, repsMin: 12, repsMax: 15 },
+    { name: 'Bizeps Curls (Kurzhantel)',    tag: 'Bizeps',         sets: 3, repsMin: 10, repsMax: 12 },
+    { name: 'Hammer Curls',                 tag: 'Bizeps',         sets: 3, repsMin: 10, repsMax: 12 },
   ]},
-  { id: 'r_ruecken', name: 'Rücken & Bizeps', emoji: '🏋️', exercises: [
-    { name: 'Latzug',                       tag: 'Rücken (breit)',     sets: 4, repsMin: 10, repsMax: 12 },
-    { name: 'Rudern',                       tag: 'Rücken (Mitte)',     sets: 4, repsMin: 10, repsMax: 12 },
-    { name: 'Face Pulls',                   tag: 'hintere Schulter',   sets: 3, repsMin: 12, repsMax: 15 },
-    { name: 'Lat Pulldown',                 tag: 'Rücken (breit)',     sets: 3, repsMin: 10, repsMax: 12 },
-    { name: 'Reverse Butterfly',            tag: 'hintere Schulter',   sets: 3, repsMin: 12, repsMax: 15 },
-    { name: 'Bizeps Kabelzug',              tag: 'Arme Definition',    sets: 3, repsMin: 12, repsMax: 15 },
-  ]},
-  { id: 'r_cardio', name: 'Cardio + Core', emoji: '🏃', exercises: [
-    { name: 'Laufband (zügig gehen)', tag: 'Cardio', sets: 1, repsMin: 1, repsMax: 1 },
-    { name: 'Fahrrad-Ergometer',      tag: 'Cardio', sets: 1, repsMin: 1, repsMax: 1 },
-    { name: 'Plank',                  tag: 'Core',   sets: 3, repsMin: 1, repsMax: 1 },
-    { name: 'Dead Bug',               tag: 'Core',   sets: 3, repsMin: 10, repsMax: 12 },
-    { name: 'Bird Dog',               tag: 'Core',   sets: 3, repsMin: 10, repsMax: 12 },
+  { id: 'r_legs', name: 'Legs (Beine · Po)', emoji: '🦵', exercises: [
+    { name: 'Kniebeugen (Langhantel)',      tag: 'Beine & Po',     sets: 4, repsMin: 8,  repsMax: 12 },
+    { name: 'Rumänisches Kreuzheben (RDL)', tag: 'Po & Beinrückseite',sets: 4, repsMin: 8, repsMax: 12 },
+    { name: 'Beinpresse',                   tag: 'Quads & Po',     sets: 3, repsMin: 10, repsMax: 12 },
+    { name: 'Hip Thrust',                   tag: 'Po Hauptübung',  sets: 3, repsMin: 10, repsMax: 12 },
+    { name: 'Beinbeuger-Maschine',          tag: 'Beinrückseite',  sets: 3, repsMin: 12, repsMax: 15 },
+    { name: 'Wadenheben',                   tag: 'Waden',          sets: 4, repsMin: 12, repsMax: 20 },
   ]},
 ];
 
@@ -71,7 +65,41 @@ const ALTERNATIVES = {
   'Plank':                        ['Knie-Plank', 'Unterarm-Plank'],
   'Dead Bug':                     ['Hollow Body Hold', 'Beinsenken (geführt)'],
   'Bird Dog':                     ['Quadruped Hip Extension', 'Superman'],
+  // Push/Pull/Legs-Alternativen
+  'Bankdrücken (Langhantel)':        ['Brustpresse (Maschine)', 'Bankdrücken (Kurzhantel)'],
+  'Schrägbankdrücken (Kurzhantel)':  ['Schrägbank-Brustpresse', 'Schräg-Liegestütze'],
+  'Trizeps Overhead Extension':      ['Trizeps Kabelzug (einarmig)', 'Dips (assistiert)'],
+  'Klimmzüge (assistiert)':          ['Latzug', 'Kabelzug sitzend'],
+  'Langhantelrudern':                ['Kurzhantel-Rudern', 'T-Bar-Rudern'],
+  'Bizeps Curls (Kurzhantel)':       ['Bizeps Kabelzug', 'Langhantel-Curls'],
+  'Hammer Curls':                    ['Bizeps Curls (Kurzhantel)', 'Seil-Hammer-Curls'],
+  'Kniebeugen (Langhantel)':         ['Beinpresse', 'Goblet Squat'],
+  'Beinpresse':                      ['Kniebeugen (Langhantel)', 'Hackenschmidt-Kniebeuge'],
+  'Beinbeuger-Maschine':             ['Rumänisches Kreuzheben (RDL)', 'Nordic Curls'],
+  'Wadenheben':                      ['Wadenheben sitzend', 'Wadenpresse (Beinpresse)'],
 };
+
+// Wählbare Mess-Frequenzen (informativ — bestimmt Beschriftung & Erinnerung)
+const FREQ_LABELS = { daily: 'täglich', weekly: 'wöchentlich', monthly: 'monatlich' };
+const FREQ_HINT = {
+  daily:   'jeden Morgen, nüchtern',
+  weekly:  'einmal pro Woche, morgens nüchtern',
+  monthly: 'einmal im Monat — immer an der gleichen Stelle',
+};
+
+// Alle möglichen Körpermaße (mehr Auswahl). key = Feld im Datensatz.
+const MEASURE_FIELDS = [
+  { key: 'hip',    emoji: '🍑', label: 'Hüfte / Po (breiteste Stelle)', lowerBetter: false },
+  { key: 'waist',  emoji: '👖', label: 'Taille (schmalste Stelle)',     lowerBetter: true  },
+  { key: 'belly',  emoji: '🤰', label: 'Bauch (Nabelhöhe)',             lowerBetter: true  },
+  { key: 'chest',  emoji: '👚', label: 'Brust',                          lowerBetter: false },
+  { key: 'arm',    emoji: '💪', label: 'Oberarm (Bizeps, angespannt)',   lowerBetter: false },
+  { key: 'forearm',emoji: '🤜', label: 'Unterarm',                       lowerBetter: false },
+  { key: 'thigh',  emoji: '🦵', label: 'Oberschenkel',                   lowerBetter: false },
+  { key: 'calf',   emoji: '🦿', label: 'Wade',                           lowerBetter: false },
+  { key: 'neck',   emoji: '🧣', label: 'Nacken / Hals',                  lowerBetter: true  },
+];
+const MEASURE_COLORS = ['#c42e86', '#7a1657', '#0f9d72', '#e08a00', '#3a7bd5', '#9b59b6', '#16a085', '#d35400', '#2c3e50'];
 
 // ─── Daten-Layer ────────────────────────────────────────────────────────────
 
@@ -94,6 +122,8 @@ function loadData() {
     d.settings.theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
   }
   if (typeof d.settings.restDefault !== 'number') d.settings.restDefault = 90;
+  if (!FREQ_LABELS[d.settings.weightFreq])  d.settings.weightFreq  = 'weekly';
+  if (!FREQ_LABELS[d.settings.measureFreq]) d.settings.measureFreq = 'monthly';
 
   // Routinen: aus Vorlage anlegen, falls noch keine vorhanden
   if (!Array.isArray(d.routines) || !d.routines.length) {
@@ -278,6 +308,7 @@ function navigate(pageId) {
   if (pageId === 'dashboard') renderDashboard();
   if (pageId === 'training')  renderTraining();
   if (pageId === 'history')   renderHistory();
+  if (pageId === 'checkin')   renderCheckin();
   if (pageId === 'stats')     renderStats();
 }
 
@@ -369,12 +400,6 @@ function renderDashboard() {
   const gms = document.getElementById('goal-month-stat');
   if (gms) { try { gms.textContent = new Date(pGoalDate(data)).toLocaleDateString('de-DE', { month: 'short' }); } catch (e) {} }
 
-  const lastM = data.measurements[data.measurements.length - 1];
-  const prevM = data.measurements[data.measurements.length - 2];
-  renderMeasureDelta('hip-value',  'hip-delta',  lastM?.hip,  prevM?.hip,  false);
-  renderMeasureDelta('waist-value','waist-delta', lastM?.waist,prevM?.waist,true);
-  renderMeasureDelta('arm-value',  'arm-delta',   lastM?.arm,  prevM?.arm,  true);
-
   const routine = nextRoutine(data);
   const nwList = document.getElementById('nw-exercises');
   if (routine) {
@@ -393,18 +418,6 @@ function renderDashboard() {
     document.getElementById('nw-title').textContent = 'Kein Trainingsplan';
     nwList.innerHTML = '<div class="nw-exercise"><span class="ex-name">Lege im Training einen Trainingsplan an</span></div>';
   }
-}
-
-function renderMeasureDelta(valId, deltaId, curr, prev, lowerIsBetter) {
-  const valEl = document.getElementById(valId), deltaEl = document.getElementById(deltaId);
-  if (!valEl) return;
-  if (!curr) { valEl.textContent = '—'; deltaEl.textContent = 'noch kein Wert'; return; }
-  valEl.textContent = curr + ' cm';
-  if (!prev) { deltaEl.textContent = ''; return; }
-  const dd = (curr - prev).toFixed(1);
-  const good = lowerIsBetter ? dd <= 0 : dd >= 0;
-  deltaEl.textContent = (dd > 0 ? '+' : '') + dd + ' cm';
-  deltaEl.className = 'm-delta ' + (good ? 'up' : 'down');
 }
 
 // ─── Training: Ansichten ──────────────────────────────────────────────────────
@@ -1157,17 +1170,89 @@ function beep() {
 
 // ─── Check-in ─────────────────────────────────────────────────────────────────
 
+// Letzten gespeicherten Wert eines Mess-Felds finden (für „zuletzt"-Hinweis)
+function lastMeasure(data, key) {
+  for (let i = data.measurements.length - 1; i >= 0; i--) {
+    const v = data.measurements[i][key];
+    if (v !== null && v !== undefined && v !== '') return v;
+  }
+  return null;
+}
+
+function renderCheckin() {
+  const data = loadData();
+
+  // Frequenz-Segmente (Gewicht + Maße)
+  buildFreqSeg('freq-weight',  data.settings.weightFreq,  'weight');
+  buildFreqSeg('freq-measure', data.settings.measureFreq, 'measure');
+
+  const wh = document.getElementById('ci-weight-head');
+  if (wh) wh.textContent = `⚖️ Gewicht (${FREQ_LABELS[data.settings.weightFreq]})`;
+  const mh = document.getElementById('ci-measure-head');
+  if (mh) mh.textContent = `📏 Körpermaße (${FREQ_LABELS[data.settings.measureFreq]})`;
+
+  const ib = document.getElementById('checkin-hint');
+  if (ib) ib.innerHTML =
+    `📅 <strong>Gewicht:</strong> ${FREQ_HINT[data.settings.weightFreq]}.<br>` +
+    `📏 <strong>Maße:</strong> ${FREQ_HINT[data.settings.measureFreq]}.`;
+
+  // Mess-Felder dynamisch aufbauen
+  const wrap = document.getElementById('measure-inputs');
+  if (wrap) {
+    wrap.innerHTML = MEASURE_FIELDS.map(f => {
+      const last = lastMeasure(data, f.key);
+      const hint = last !== null ? `zuletzt ${last} cm` : '';
+      return `<div class="input-field">
+        <label>${f.emoji} ${escapeHtml(f.label)}${hint ? ` <span class="ci-last">${hint}</span>` : ''}</label>
+        <input type="number" id="ci-${f.key}" inputmode="decimal" step="0.5" min="0" max="250" placeholder="—" />
+        <span class="unit">cm</span>
+      </div>`;
+    }).join('');
+  }
+
+  // aktuelles Gewicht vorbelegen (Hinweis)
+  const wIn = document.getElementById('ci-weight');
+  if (wIn) wIn.placeholder = latestWeight(data).toFixed(1);
+}
+
+function buildFreqSeg(containerId, current, kind) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.innerHTML = ['daily', 'weekly', 'monthly'].map(f =>
+    `<button type="button" class="freq-opt${f === current ? ' sel' : ''}" onclick="setFreq('${kind}','${f}')">${FREQ_LABELS[f]}</button>`
+  ).join('');
+}
+
+function setFreq(kind, freq) {
+  const data = loadData();
+  if (kind === 'weight') data.settings.weightFreq = freq;
+  else data.settings.measureFreq = freq;
+  saveData(data);
+  renderCheckin();
+}
+
 function saveCheckin() {
   const data = loadData();
+  let saved = false;
   const weight = parseFloat(document.getElementById('ci-weight').value);
-  if (weight) data.weightLog.push({ date: today(), weight });
-  const hip   = parseFloat(document.getElementById('ci-hip').value)   || null;
-  const waist = parseFloat(document.getElementById('ci-waist').value) || null;
-  const arm   = parseFloat(document.getElementById('ci-arm').value)   || null;
-  if (hip || waist || arm) data.measurements.push({ date: today(), hip, waist, arm });
+  if (weight) { data.weightLog.push({ date: today(), weight }); saved = true; }
+
+  const entry = { date: today() };
+  let hasMeasure = false;
+  MEASURE_FIELDS.forEach(f => {
+    const el = document.getElementById('ci-' + f.key);
+    const v = el ? parseFloat(el.value) : NaN;
+    if (!isNaN(v) && v > 0) { entry[f.key] = v; hasMeasure = true; }
+  });
+  if (hasMeasure) { data.measurements.push(entry); saved = true; }
+
+  if (!saved) { showToast('Bitte mindestens einen Wert eingeben', '#c46a04'); return; }
+
   saveData(data);
-  ['ci-weight', 'ci-hip', 'ci-waist', 'ci-arm'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('ci-weight').value = '';
+  MEASURE_FIELDS.forEach(f => { const el = document.getElementById('ci-' + f.key); if (el) el.value = ''; });
   showToast('✓ Werte gespeichert!');
+  renderCheckin();
 }
 
 // ─── Statistiken ──────────────────────────────────────────────────────────────
@@ -1214,13 +1299,21 @@ function renderWeightChart(data) {
 function renderMeasureChart(data) {
   const ctx = document.getElementById('canvas-measures')?.getContext('2d');
   if (!ctx || !data.measurements.length) return;
+  const labels = data.measurements.map(m => m.date);
+  // nur Felder mit mindestens einem Wert anzeigen
+  const datasets = [];
+  MEASURE_FIELDS.forEach((f, i) => {
+    if (!data.measurements.some(m => m[f.key] !== null && m[f.key] !== undefined && m[f.key] !== '')) return;
+    const col = MEASURE_COLORS[i % MEASURE_COLORS.length];
+    datasets.push({
+      label: f.label.split(' (')[0] + ' (cm)',
+      data: data.measurements.map(m => (m[f.key] ?? null)),
+      borderColor: col, backgroundColor: col, tension: .3, spanGaps: true,
+    });
+  });
   chartInstance = new Chart(ctx, {
     type: 'line',
-    data: { labels: data.measurements.map(m => m.date), datasets: [
-      { label: 'Hüfte/Po (cm)', data: data.measurements.map(m => m.hip),   borderColor: '#c42e86', backgroundColor: '#c42e86', tension: .3 },
-      { label: 'Taille (cm)',   data: data.measurements.map(m => m.waist), borderColor: '#7a1657', backgroundColor: '#7a1657', tension: .3 },
-      { label: 'Oberarm (cm)',  data: data.measurements.map(m => m.arm),   borderColor: '#0f9d72', backgroundColor: '#0f9d72', tension: .3 },
-    ]},
+    data: { labels, datasets },
     options: chartOptions('Umfang (cm)'),
   });
 }

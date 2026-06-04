@@ -638,6 +638,39 @@ nav {
   align-items: center;
   gap: 8px;
 }
+.ci-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.ci-head h2 { margin-bottom: 0; }
+.freq-seg {
+  display: inline-flex;
+  background: var(--primary-50);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 3px;
+  gap: 2px;
+}
+.freq-opt {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 7px 12px;
+  border-radius: 99px;
+  cursor: pointer;
+  min-height: 32px;
+  transition: background .2s ease, color .2s ease;
+}
+.freq-opt.sel { background: var(--grad-primary); color: #fff; box-shadow: var(--shadow-sm); }
+.ci-last { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-left: 4px; }
+
 .input-row { display: flex; flex-direction: column; gap: 10px; }
 .input-field {
   display: flex;
