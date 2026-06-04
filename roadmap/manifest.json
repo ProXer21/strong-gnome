@@ -1,15 +1,16 @@
 {
+  "id": "/strong-gnome/roadmap/",
   "name": "Strong Gnome · Roadmap",
   "short_name": "SG Roadmap",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/strong-gnome/roadmap/",
+  "scope": "/strong-gnome/roadmap/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#06070b",
   "theme_color": "#06070b",
   "icons": [
-    { "src": "../icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "../icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "../icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/strong-gnome/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/strong-gnome/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/strong-gnome/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
