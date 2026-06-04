@@ -1,8 +1,9 @@
-const CACHE_NAME = 'fitness-trainer-v1';
+const CACHE_NAME = 'fitness-trainer-v4';
 const ASSETS = [
+  './',
   './index.html',
-  './style.css',
-  './app.js',
+  './style.css?v=4',
+  './app.js?v=4',
   './manifest.json',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
 ];

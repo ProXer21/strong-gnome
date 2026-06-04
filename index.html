@@ -6,10 +6,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="FitnessTrainer" />
-  <meta name="theme-color" content="#b5338a" />
+  <meta name="theme-color" content="#fdf6fb" />
   <title>Mein Fitness-Trainer</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
+  <link rel="stylesheet" href="./style.css?v=4" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -34,10 +37,10 @@
 <section id="page-dashboard" class="page active">
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start">
     <div>
-      <h1>Hallo! 👋</h1>
+      <h1>Hallo!</h1>
       <p id="weekly-target">Lade…</p>
     </div>
-    <span id="sync-status" title="Cloud-Sync" style="font-size:22px;cursor:default"></span>
+    <span id="sync-status" title="Cloud-Sync" style="font-size:20px;cursor:default"></span>
   </div>
 
   <!-- Weight progress -->
@@ -45,14 +48,14 @@
     <div class="card-title">Gewichtsfortschritt</div>
     <div style="display:flex;align-items:baseline;gap:8px">
       <h2><span id="current-weight">82.0</span> <span>kg</span></h2>
-      <span style="font-size:14px;color:#b5338a;font-weight:700" id="weight-lost"></span>
+      <span style="font-size:14px;color:var(--mint);font-weight:800" id="weight-lost"></span>
     </div>
     <div class="progress-wrap">
       <div class="progress-bar" id="progress-bar" style="width:0%"></div>
     </div>
     <div class="progress-label">
       <span id="progress-start">82 kg</span>
-      <span id="progress-pct" style="color:#b5338a;font-weight:700">0%</span>
+      <span id="progress-pct" style="color:var(--primary);font-weight:800">0%</span>
       <span id="progress-goal">70 kg</span>
     </div>
   </div>
@@ -93,10 +96,10 @@
       <div class="m-value" id="arm-value">—</div>
       <div class="m-delta" id="arm-delta"></div>
     </div>
-    <div class="measure-card" onclick="navigate('checkin')" style="cursor:pointer;border:2px dashed #e0d0db;box-shadow:none;">
+    <div class="measure-card" onclick="navigate('checkin')" style="cursor:pointer;border:2px dashed rgba(196,46,134,.35);box-shadow:none;background:transparent;">
       <div class="m-icon">➕</div>
-      <div class="m-label" style="color:#b5338a;font-weight:700">Einchecken</div>
-      <div class="m-value" style="font-size:13px;color:#6b6b6b">Werte eintragen</div>
+      <div class="m-label" style="color:var(--primary-dark);font-weight:700">Einchecken</div>
+      <div class="m-value" style="font-size:13px;color:var(--text-muted)">Werte eintragen</div>
     </div>
   </div>
 
@@ -107,7 +110,7 @@
     <div class="nw-exercises" id="nw-exercises"></div>
   </div>
 
-  <button class="save-workout-btn" onclick="navigate('training')" style="background:linear-gradient(135deg,#7b1f60,#b5338a)">
+  <button class="save-workout-btn" onclick="navigate('training')">
     Training starten →
   </button>
 </section>
@@ -115,26 +118,26 @@
 <!-- ─── Training ──────────────────────────────────────────────────────── -->
 <section id="page-training" class="page">
   <div class="page-header">
-    <h1>Training 💪</h1>
+    <h1>Training</h1>
     <p id="day-info">Wähle einen Tag</p>
   </div>
 
   <div class="day-selector">
     <button class="day-btn" data-day="A">
       <div class="day-letter">A</div>
-      <div class="day-label">Po 🍑</div>
+      <div class="day-label">Po</div>
     </button>
     <button class="day-btn" data-day="B">
       <div class="day-letter">B</div>
-      <div class="day-label">Brust 💪</div>
+      <div class="day-label">Brust</div>
     </button>
     <button class="day-btn" data-day="C">
       <div class="day-letter">C</div>
-      <div class="day-label">Rücken 🔙</div>
+      <div class="day-label">Rücken</div>
     </button>
     <button class="day-btn" data-day="D">
       <div class="day-letter">D</div>
-      <div class="day-label">Cardio 🏃</div>
+      <div class="day-label">Cardio</div>
     </button>
   </div>
 
@@ -146,7 +149,7 @@
 <!-- ─── Check-in ──────────────────────────────────────────────────────── -->
 <section id="page-checkin" class="page">
   <div class="page-header">
-    <h1>Einchecken ✅</h1>
+    <h1>Einchecken</h1>
     <p>Deine Werte eintragen</p>
   </div>
 
@@ -207,7 +210,7 @@
 <!-- ─── Statistiken ───────────────────────────────────────────────────── -->
 <section id="page-stats" class="page">
   <div class="page-header">
-    <h1>Statistiken 📊</h1>
+    <h1>Statistiken</h1>
     <p>Dein Fortschritt auf einen Blick</p>
   </div>
 
@@ -252,7 +255,7 @@
   <div id="chart-heatmap" class="chart-view" style="display:none">
     <div class="chart-container">
       <h3>🔥 Trainings-Konsistenz</h3>
-      <p style="font-size:12px;color:#6b6b6b;margin-bottom:12px">Lila = Trainingstag</p>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Pink = Trainingstag</p>
       <div class="heatmap" id="heatmap-grid"></div>
     </div>
   </div>
@@ -269,7 +272,7 @@
   <div id="chart-month" class="chart-view" style="display:none">
     <div class="chart-container mb-0">
       <h3>🗓️ Monatscheck — Wie lief es?</h3>
-      <p style="font-size:12px;color:#6b6b6b;margin-bottom:14px">🟢 = Ziel erreicht · 🟡 = Nah dran · 🔴 = Anpassen</p>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">🟢 = Ziel erreicht · 🟡 = Nah dran · 🔴 = Anpassen</p>
       <div class="month-summary" id="month-summary-grid">
         <div class="empty-state" style="grid-column:1/-1">
           <div class="es-icon">📊</div>
@@ -282,24 +285,32 @@
 
 <!-- ─── Navigation ────────────────────────────────────────────────────── -->
 <nav>
-  <button class="nav-btn active" data-page="dashboard">
-    <span class="icon">🏠</span>
+  <button class="nav-btn active" data-page="dashboard" aria-label="Start">
+    <span class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+    </span>
     <span>Start</span>
   </button>
-  <button class="nav-btn" data-page="training">
-    <span class="icon">💪</span>
+  <button class="nav-btn" data-page="training" aria-label="Training">
+    <span class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    </span>
     <span>Training</span>
   </button>
-  <button class="nav-btn" data-page="checkin">
-    <span class="icon">✅</span>
+  <button class="nav-btn" data-page="checkin" aria-label="Einchecken">
+    <span class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
+    </span>
     <span>Einchecken</span>
   </button>
-  <button class="nav-btn" data-page="stats">
-    <span class="icon">📊</span>
+  <button class="nav-btn" data-page="stats" aria-label="Statistiken">
+    <span class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>
+    </span>
     <span>Statistiken</span>
   </button>
 </nav>
 
-<script src="./app.js?v=3"></script>
+<script src="./app.js?v=4"></script>
 </body>
 </html>

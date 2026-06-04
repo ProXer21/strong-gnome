@@ -404,7 +404,7 @@ function addCustomExercise() {
   if (exists) { showToast('Übung existiert bereits an diesem Tag', '#e65100'); return; }
   data.customExercises[selectedDay].push({ name: clean, target: '3×12', tag: 'Eigene Übung' });
   saveData(data);
-  showToast(`✓ "${clean}" hinzugefügt`, '#b5338a');
+  showToast(`✓ "${clean}" hinzugefügt`, '#c42e86');
   renderExercises();
 }
 
@@ -447,7 +447,7 @@ function chooseAlternative(altIdx) {
   card.querySelector('.ex-info p').textContent += ' (Alternativ)';
   card.dataset.altName = alt;
   closeAltModal();
-  showToast(`Alternativübung gewählt: ${alt}`, '#b5338a');
+  showToast(`Alternativübung gewählt: ${alt}`, '#c42e86');
 }
 
 function skipExercise() {
@@ -575,8 +575,8 @@ function renderWeightChart(data) {
             const i = weightLabels.indexOf(l);
             return i >= 0 ? weightVals[i] : null;
           }),
-          borderColor: '#b5338a',
-          backgroundColor: 'rgba(181,51,138,.1)',
+          borderColor: '#c42e86',
+          backgroundColor: 'rgba(196,46,134,.12)',
           tension: .3,
           fill: false,
           pointRadius: 5,
@@ -585,7 +585,7 @@ function renderWeightChart(data) {
         {
           label: 'Ziel-Kurve',
           data: goalData,
-          borderColor: '#ccc',
+          borderColor: '#d8c7d2',
           borderDash: [6, 4],
           pointRadius: 0,
           fill: false,
@@ -607,9 +607,9 @@ function renderMeasureChart(data) {
     data: {
       labels,
       datasets: [
-        { label: 'Hüfte/Po (cm)', data: data.measurements.map(m => m.hip),   borderColor: '#b5338a', tension: .3 },
-        { label: 'Taille (cm)',   data: data.measurements.map(m => m.waist), borderColor: '#7b1f60', tension: .3 },
-        { label: 'Oberarm (cm)', data: data.measurements.map(m => m.arm),   borderColor: '#e8a0d0', tension: .3 },
+        { label: 'Hüfte/Po (cm)', data: data.measurements.map(m => m.hip),   borderColor: '#c42e86', backgroundColor: '#c42e86', tension: .3 },
+        { label: 'Taille (cm)',   data: data.measurements.map(m => m.waist), borderColor: '#7a1657', backgroundColor: '#7a1657', tension: .3 },
+        { label: 'Oberarm (cm)', data: data.measurements.map(m => m.arm),   borderColor: '#0f9d72', backgroundColor: '#0f9d72', tension: .3 },
       ],
     },
     options: chartOptions('Umfang (cm)'),
@@ -643,7 +643,7 @@ function renderStrengthChart(data) {
     type: 'bar',
     data: {
       labels: pts.map(p => p.date),
-      datasets: [{ label: chosen + ' (kg)', data: pts.map(p => p.weight), backgroundColor: '#b5338a' }],
+      datasets: [{ label: chosen + ' (kg)', data: pts.map(p => p.weight), backgroundColor: '#c42e86', borderRadius: 6 }],
     },
     options: chartOptions('Maximalgewicht (kg)'),
   });
@@ -687,7 +687,7 @@ function renderVolumeChart(data) {
     type: 'bar',
     data: {
       labels,
-      datasets: [{ label: 'Volumen (kg×Wdh.)', data: labels.map(l => weekMap[l]), backgroundColor: '#b5338a88', borderColor: '#b5338a', borderWidth: 2 }],
+      datasets: [{ label: 'Volumen (kg×Wdh.)', data: labels.map(l => weekMap[l]), backgroundColor: 'rgba(196,46,134,.55)', borderColor: '#c42e86', borderWidth: 2, borderRadius: 6 }],
     },
     options: chartOptions('Trainingsvolumen'),
   });
