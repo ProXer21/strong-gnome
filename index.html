@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=18" />
+  <link rel="stylesheet" href="./style.css?v=19" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -43,7 +43,7 @@
 <div id="toast" class="toast"></div>
 
 <!-- ─── Ladezustand ───────────────────────────────────────────────────── -->
-<div id="loading-screen"><div class="spinner"></div></div>
+<div id="loading-screen"><img src="./logo.png" class="loading-logo" alt="FitnessTrainer" /><div class="spinner"></div></div>
 
 <!-- ─── Login / Registrieren ──────────────────────────────────────────── -->
 <div id="auth-screen">
@@ -51,7 +51,7 @@
 
     <!-- Ansicht: Anmelden -->
     <div id="auth-login">
-      <div class="auth-logo">💪</div>
+      <img src="./logo.png" class="auth-logo-img" alt="FitnessTrainer Logo" />
       <h1 class="auth-title">FitnessTrainer</h1>
       <p class="auth-sub">Schön, dass du da bist</p>
       <label class="auth-label">E-Mail</label>
@@ -542,6 +542,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=21"></script>
+<script src="./app.js?v=22"></script>
 </body>
 </html>

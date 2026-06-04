@@ -1429,6 +1429,9 @@ body:not([data-state="app"]) .page { display: none !important; }
   animation: introCard .4s cubic-bezier(.22,1,.36,1) both;
 }
 .auth-logo { font-size: 48px; text-align: center; line-height: 1; }
+.auth-logo-img { display: block; width: 96px; height: 96px; margin: 0 auto 2px; object-fit: contain; }
+.loading-logo { width: 120px; height: 120px; object-fit: contain; margin-bottom: 20px; }
+#loading-screen { flex-direction: column; }
 .auth-title {
   text-align: center; font-size: 26px; font-weight: 800; letter-spacing: -0.02em;
   margin-top: 8px; color: var(--primary-dark);
