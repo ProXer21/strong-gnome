@@ -681,43 +681,61 @@ function runCountdown(cb) {
   const flash = el.querySelector('.cd-flash');
   let n = 3, done = false;
 
+  const resetNum = () => num.classList.remove('slam', 'is-force', 'force-anim');
+
   const finish = () => {
     if (done) return;
     done = true;
     clearTimeout(window._cdT);
-    el.classList.remove('show', 'shake');
     el.onclick = null;
-    cb();
+    el.classList.add('exit');         // Overlay zoomt weg
+    revealWorkout();                  // Trainingsplan steigt gestaffelt ein
+    cb();                             // Timer startet
+    window._cdEnd = setTimeout(() => { el.classList.remove('show', 'shake', 'exit'); }, 640);
   };
   el.onclick = finish;
   el.classList.add('show');
 
-  const burst = (text, isGo) => {
-    num.textContent = text;
-    num.classList.toggle('is-go', !!isGo);
-    // Animationen neu auslösen
-    num.classList.remove('slam'); ring.classList.remove('go'); el.classList.remove('shake');
-    void num.offsetWidth;
-    num.classList.add('slam'); ring.classList.add('go'); el.classList.add('shake');
-    if (isGo) { flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on'); }
-  };
-
   const tick = () => {
     if (done) return;
+
     if (n <= 0) {
-      burst('LOS!', true);
+      // Finale: fitness-Star-Wars-Spruch statt „LOS!"
+      resetNum();
+      num.textContent = 'MÖGE DIE KRAFT MIT DIR SEIN';
+      ring.classList.remove('go'); el.classList.remove('shake');
+      void num.offsetWidth;
+      num.classList.add('is-force', 'force-anim');
+      ring.classList.add('go'); el.classList.add('shake');
+      flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on');
       playGo();
-      try { if (navigator.vibrate) navigator.vibrate([0, 90, 60, 90, 60, 280]); } catch (e) {}
-      window._cdT = setTimeout(finish, 700);
+      try { if (navigator.vibrate) navigator.vibrate([0, 110, 60, 110, 60, 320]); } catch (e) {}
+      window._cdT = setTimeout(finish, 1700);
       return;
     }
-    burst(String(n), false);
+
+    // Countdown-Zahl
+    resetNum();
+    num.textContent = String(n);
+    ring.classList.remove('go'); el.classList.remove('shake');
+    void num.offsetWidth;
+    num.classList.add('slam'); ring.classList.add('go'); el.classList.add('shake');
     playThud(140 + (3 - n) * 28);
     try { if (navigator.vibrate) navigator.vibrate(130 + (3 - n) * 45); } catch (e) {}
     n--;
     window._cdT = setTimeout(tick, 820);
   };
   tick();
+}
+
+// Trainingsplan gestaffelt einblenden (coole Transition nach dem Countdown)
+function revealWorkout() {
+  const w = document.getElementById('tv-workout');
+  if (!w) return;
+  w.classList.remove('reveal');
+  void w.offsetWidth;
+  w.classList.add('reveal');
+  setTimeout(() => w.classList.remove('reveal'), 1400);
 }
 
 // ─── Sound-Effekte (Web Audio) ────────────────────────────────────────────────
