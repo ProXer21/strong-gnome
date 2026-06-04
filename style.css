@@ -270,7 +270,62 @@ nav {
   border-radius: 99px;
   background: var(--primary-light);
   color: var(--primary-dark);
+  white-space: nowrap;
 }
+
+/* "Letztes Mal" Hinweis + Empfehlungsrichtung */
+.ex-last {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+.ex-last strong { color: var(--text); }
+.ex-last .ex-trend { color: var(--primary-dark); font-weight: 700; }
+.ex-last-new { color: var(--primary-dark); font-weight: 600; }
+
+/* Eigene Übungen */
+.exercise-entry.custom-ex { border-left-color: #7b1f60; }
+.custom-tag {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  vertical-align: middle;
+  padding: 2px 6px;
+  border-radius: 99px;
+  background: #7b1f60;
+  color: #fff;
+  margin-left: 4px;
+}
+.btn-remove-ex {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.btn-remove-ex:active { color: #c0392b; }
+
+/* "+ Eigene Übung hinzufügen" */
+.btn-add-ex {
+  width: 100%;
+  padding: 14px;
+  margin-bottom: 12px;
+  border: 2px dashed var(--primary-light);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--primary-dark);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-add-ex:active { background: var(--primary-light); }
 
 .set-inputs {
   display: grid;

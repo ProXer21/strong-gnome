@@ -13,47 +13,46 @@ const PHASES = [
   { week: 10, sets: 4, repsMin: 8,  repsMax: 10 },
 ];
 
-// Training days definition
+// Training days definition (Celinas echter Plan)
 const TRAINING_DAYS = {
   A: {
-    label: 'Glutes & Beine I',
+    label: 'Po & Beine',
     emoji: '🍑',
     exercises: [
-      { name: 'Hip Thrust',            target: '4×10', tag: 'Po Hauptübung' },
-      { name: 'Rumänisches Kreuzheben', target: '3×12', tag: 'Po & Beine' },
-      { name: 'Bulgarian Split Squat', target: '3×10', tag: 'Po & Quads' },
-      { name: 'Cable Kickback',         target: '3×15', tag: 'Po Isolierung' },
-      { name: 'Beinpresse (eng)',        target: '3×12', tag: 'Po & Quads' },
-      { name: 'Lying Leg Curl',         target: '3×12', tag: 'Oberschenkel' },
+      { name: 'Hip Thrust',                    target: '4×10', tag: 'Po Hauptübung' },
+      { name: 'Rumänisches Kreuzheben (RDL)',  target: '4×12', tag: 'Po & Beinrückseite' },
+      { name: 'Einbeinige Beinpresse',         target: '3×12', tag: 'Po & Quads' },
+      { name: 'Abduktoren-Maschine',           target: '4×15', tag: 'Po (seitlich)' },
+      { name: 'Hyperextension',                target: '3×15', tag: 'Po & unterer Rücken' },
     ],
   },
   B: {
-    label: 'Rücken + Arme Toning',
+    label: 'Brust & Arme',
     emoji: '💪',
     exercises: [
-      { name: 'Latzug',               target: '4×12', tag: 'Rücken' },
-      { name: 'Rudermaschine',         target: '4×12', tag: 'Rücken Mitte' },
-      { name: 'Face Pulls',            target: '3×15', tag: 'Schultern & Rücken' },
-      { name: 'Cable Rows',            target: '3×12', tag: 'Rücken' },
-      { name: 'Bizepscurls',           target: '3×20', tag: 'Arme Definition' },
-      { name: 'Trizeps-Pushdown',      target: '3×20', tag: 'Arme Definition' },
-      { name: 'Seitheben',             target: '3×15', tag: 'Schultern' },
+      { name: 'Brustpresse',                   target: '4×12', tag: 'Brust' },
+      { name: 'Butterfly',                     target: '3×12', tag: 'Brust Isolierung' },
+      { name: 'Schulterdrücken (Kurzhantel)',  target: '3×12', tag: 'Schultern' },
+      { name: 'Seitheben',                     target: '3×15', tag: 'Schultern Definition' },
+      { name: 'Trizeps Kabelzug (einarmig)',   target: '3×15', tag: 'Arme Definition' },
+      { name: 'Trizeps Pushdown',              target: '3×15', tag: 'Arme Definition' },
+      { name: 'Around the World',              target: '3×15', tag: 'Schultern/Brust' },
     ],
   },
   C: {
-    label: 'Glutes & Beine II',
-    emoji: '🍑',
+    label: 'Rücken & Bizeps',
+    emoji: '🔙',
     exercises: [
-      { name: 'Sumo-Kreuzheben',       target: '4×10', tag: 'Po & Beine' },
-      { name: 'Glute Bridge',          target: '4×15', tag: 'Po' },
-      { name: 'Ausfallschritte',       target: '3×12', tag: 'Po & Quads' },
-      { name: 'Abduktor-Maschine',     target: '3×15', tag: 'Außenoberschenkel' },
-      { name: 'Step-Ups',              target: '3×12', tag: 'Po & Beine' },
-      { name: 'Donkey Kicks (Kabel)',  target: '3×15', tag: 'Po Isolierung' },
+      { name: 'Latzug',                        target: '4×12', tag: 'Rücken (breit)' },
+      { name: 'Rudern',                        target: '4×12', tag: 'Rücken (Mitte)' },
+      { name: 'Face Pulls',                    target: '3×15', tag: 'hintere Schulter' },
+      { name: 'Lat Pulldown',                  target: '3×12', tag: 'Rücken (breit)' },
+      { name: 'Reverse Butterfly',             target: '3×15', tag: 'hintere Schulter' },
+      { name: 'Bizeps Kabelzug',               target: '3×15', tag: 'Arme Definition' },
     ],
   },
   D: {
-    label: 'Cardio + Core',
+    label: 'Cardio + Core (optional)',
     emoji: '🏃',
     exercises: [
       { name: 'Laufband (zügig gehen)', target: '20 Min', tag: 'Cardio' },
@@ -66,42 +65,73 @@ const TRAINING_DAYS = {
 };
 
 const ALTERNATIVES = {
-  'Hip Thrust':             ['Glute Bridge (Boden)', 'Beinpresse (eng, Po-Fokus)'],
-  'Rumänisches Kreuzheben': ['Beinbeuger-Maschine', 'Sumo-Kreuzheben'],
-  'Bulgarian Split Squat':  ['Ausfallschritte', 'Einbeinige Beinpresse'],
-  'Cable Kickback':         ['Donkey Kicks (Kabel)', 'Glute-Maschine'],
-  'Beinpresse (eng)':       ['Kniebeugen (Smith)', 'Beinpresse (normal)'],
-  'Lying Leg Curl':         ['Stehender Leg Curl', 'Romanian Deadlift (Maschine)'],
-  'Latzug':                 ['Assisted Pull-up', 'Kabelzug sitzend'],
-  'Rudermaschine':          ['Kurzhantel-Rudern', 'T-Bar-Rudern'],
-  'Face Pulls':             ['Reverse Flyes', 'Band Pull-Aparts'],
-  'Cable Rows':             ['Langhantel-Rudern', 'Maschinen-Rudern'],
-  'Bizepscurls':            ['Hammer Curls', 'Konzentrationscurls'],
-  'Trizeps-Pushdown':       ['Overhead Trizeps-Extension', 'Kickbacks'],
-  'Seitheben':              ['Seitheben (Kabel)', 'Frontlantel (leicht)'],
-  'Sumo-Kreuzheben':        ['Konventionelles Kreuzheben', 'Romanian Deadlift'],
-  'Glute Bridge':           ['Hip Thrust (leichter)', 'Donkey Kicks'],
-  'Ausfallschritte':        ['Reverse Lunges', 'Einbeinige Beinpresse'],
-  'Abduktor-Maschine':      ['Side-Lying Abduktion', 'Band Abduktion'],
-  'Step-Ups':               ['Box Jumps (niedrig)', 'Ausfallschritte'],
-  'Donkey Kicks (Kabel)':   ['Fire Hydrants', 'Glute Kickbacks (Maschine)'],
-  'Laufband (zügig gehen)': ['Ellipsentrainer', 'Stepper'],
-  'Fahrrad-Ergometer':      ['Rudermaschine', 'Crosstrainer'],
-  'Plank':                  ['Knie-Plank', 'Unterarm-Plank'],
-  'Dead Bug':               ['Hollow Body Hold', 'Beinsenken (geführt)'],
-  'Bird Dog':               ['Quadruped Hip Extension', 'Superman'],
+  // Tag A — Po & Beine
+  'Hip Thrust':                   ['Glute Bridge (Boden)', 'Beinpresse (Po-Fokus)'],
+  'Rumänisches Kreuzheben (RDL)': ['Beinbeuger-Maschine', 'Good Mornings'],
+  'Einbeinige Beinpresse':        ['Ausfallschritte', 'Bulgarian Split Squat'],
+  'Abduktoren-Maschine':          ['Kabel-Abduktion', 'Band Abduktion (seitlich)'],
+  'Hyperextension':               ['Glute Bridge', 'Romanian Deadlift (leicht)'],
+  // Tag B — Brust & Arme
+  'Brustpresse':                  ['Bankdrücken (Kurzhantel)', 'Liegestütze'],
+  'Butterfly':                    ['Kabel-Flys', 'Schrägbank-Flys'],
+  'Schulterdrücken (Kurzhantel)': ['Schulterpresse (Maschine)', 'Arnold Press'],
+  'Seitheben':                    ['Seitheben (Kabel)', 'Seitheben (Maschine)'],
+  'Trizeps Kabelzug (einarmig)':  ['Overhead Extension', 'Trizeps Kickback'],
+  'Trizeps Pushdown':             ['Dips (assistiert)', 'Overhead Extension'],
+  'Around the World':             ['Frontheben', 'Seitheben (leicht)'],
+  // Tag C — Rücken & Bizeps
+  'Latzug':                       ['Klimmzüge (assistiert)', 'Kabelzug sitzend'],
+  'Rudern':                       ['Kurzhantel-Rudern', 'T-Bar-Rudern'],
+  'Face Pulls':                   ['Reverse Butterfly', 'Band Pull-Aparts'],
+  'Lat Pulldown':                 ['Latzug (eng)', 'Klimmzüge (assistiert)'],
+  'Reverse Butterfly':            ['Face Pulls', 'Reverse Flyes (Kurzhantel)'],
+  'Bizeps Kabelzug':              ['Hammer Curls', 'Kurzhantel-Curls'],
+  // Tag D — Cardio + Core
+  'Laufband (zügig gehen)':       ['Ellipsentrainer', 'Stepper'],
+  'Fahrrad-Ergometer':            ['Rudermaschine', 'Crosstrainer'],
+  'Plank':                        ['Knie-Plank', 'Unterarm-Plank'],
+  'Dead Bug':                     ['Hollow Body Hold', 'Beinsenken (geführt)'],
+  'Bird Dog':                     ['Quadruped Hip Extension', 'Superman'],
 };
 
 // ─── Data Layer ───────────────────────────────────────────────────────────────
 
 function loadData() {
+  let d;
   try {
-    return JSON.parse(localStorage.getItem('fitnessData') || 'null') || {
-      weightLog: [],
-      measurements: [],
-      workouts: [],
-    };
-  } catch { return { weightLog: [], measurements: [], workouts: [] }; }
+    d = JSON.parse(localStorage.getItem('fitnessData') || 'null');
+  } catch { d = null; }
+  if (!d) d = {};
+  // Defaults / Migration für ältere Datenstände
+  if (!Array.isArray(d.weightLog))    d.weightLog = [];
+  if (!Array.isArray(d.measurements)) d.measurements = [];
+  if (!Array.isArray(d.workouts))     d.workouts = [];
+  if (!d.customExercises || typeof d.customExercises !== 'object') {
+    d.customExercises = { A: [], B: [], C: [], D: [] };
+  }
+  ['A', 'B', 'C', 'D'].forEach(k => {
+    if (!Array.isArray(d.customExercises[k])) d.customExercises[k] = [];
+  });
+  return d;
+}
+
+// Basis-Übungen + eigene (vom Nutzer hinzugefügte) Übungen eines Tages
+function getDayExercises(day, data) {
+  const base   = (TRAINING_DAYS[day]?.exercises || []).map(e => ({ ...e, custom: false }));
+  const custom = (data.customExercises?.[day] || []).map(e => ({ ...e, custom: true }));
+  return [...base, ...custom];
+}
+
+// Letzte tatsächlich gemachte Einheit einer Übung (für "vom letzten Mal übernehmen")
+function lastSessionInfo(name, data) {
+  for (let i = data.workouts.length - 1; i >= 0; i--) {
+    const ex = data.workouts[i].exercises.find(e => e.name === name && !e.skipped && e.sets?.length);
+    if (ex) {
+      const s = ex.sets[ex.sets.length - 1];
+      return { weight: s.weight, reps: s.reps, rpe: s.rpe, date: data.workouts[i].date };
+    }
+  }
+  return null;
 }
 
 function saveData(data) {
@@ -141,6 +171,7 @@ function latestWeight(data) {
 }
 
 function nextTrainingDay(data) {
+  // Rotation: Po → Brust → Rücken → Po → Cardio → wieder von vorn
   const dayOrder = ['A', 'B', 'C', 'A', 'D'];
   if (!data.workouts.length) return 'A';
   const last = data.workouts[data.workouts.length - 1].dayType;
@@ -239,9 +270,8 @@ function renderDashboard() {
 
   const nwList = document.getElementById('nw-exercises');
   nwList.innerHTML = '';
-  day.exercises.slice(0, 4).forEach(ex => {
+  getDayExercises(nextDay, data).slice(0, 5).forEach(ex => {
     const rec = calculateNextWeight(ex.name, data);
-    const phase = currentPhase();
     const div = document.createElement('div');
     div.className = 'nw-exercise';
     div.innerHTML = `
@@ -292,33 +322,49 @@ function updateDaySelector() {
 function renderExercises() {
   if (!selectedDay) return;
   const phase = currentPhase();
+  const data  = loadData();
   const list  = document.getElementById('exercise-list');
   list.innerHTML = '';
 
-  TRAINING_DAYS[selectedDay].exercises.forEach((ex, i) => {
-    const data = loadData();
-    const rec  = calculateNextWeight(ex.name, data);
-    const placeholder = rec !== null ? rec + ' kg' : '—';
+  getDayExercises(selectedDay, data).forEach((ex, i) => {
+    const rec  = calculateNextWeight(ex.name, data);   // Empfehlung (letztes Gewicht + Progression)
+    const last = lastSessionInfo(ex.name, data);        // was beim letzten Mal verwendet wurde
+    // Gewicht vom letzten Mal übernehmen: Feld mit empfohlenem Gewicht vorbefüllen
+    const prefill = rec !== null ? rec : (last ? last.weight : '');
+    const safeName = ex.name.replace(/'/g, "\\'");
+
+    // Hinweiszeile: "Letztes Mal" + Empfehlungsrichtung
+    let hint = '';
+    if (last) {
+      let trend = '→ Gewicht halten';
+      if (rec !== null && rec > last.weight) trend = `↑ steigern auf ${rec} kg`;
+      else if (rec !== null && rec < last.weight) trend = `↓ reduzieren auf ${rec} kg`;
+      hint = `<div class="ex-last">📅 Letztes Mal: <strong>${last.weight} kg × ${last.reps}</strong> · RPE ${last.rpe} &nbsp;<span class="ex-trend">${trend}</span></div>`;
+    } else {
+      hint = `<div class="ex-last ex-last-new">✨ Erste Einheit — Startgewicht selbst wählen</div>`;
+    }
 
     const div = document.createElement('div');
-    div.className = 'exercise-entry';
+    div.className = 'exercise-entry' + (ex.custom ? ' custom-ex' : '');
     div.id = 'ex-' + i;
     div.innerHTML = `
       <div class="ex-header">
         <div class="ex-info">
-          <h3>${ex.name}</h3>
-          <p>${phase.sets}×${phase.repsMin}–${phase.repsMax} Wdh. · ${ex.tag}</p>
+          <h3>${ex.name}${ex.custom ? ' <span class="custom-tag">eigene</span>' : ''}</h3>
+          <p>${phase.sets}×${phase.repsMin}–${phase.repsMax} Wdh. · ${ex.tag || 'Übung'}</p>
         </div>
-        ${rec !== null ? `<span class="ex-badge">Ziel: ${rec} kg</span>` : ''}
+        ${rec !== null ? `<span class="ex-badge">Empfohlen: ${rec} kg</span>` : ''}
+        ${ex.custom ? `<button class="btn-remove-ex" title="Übung entfernen" onclick="removeCustomExercise('${safeName}')">✕</button>` : ''}
       </div>
+      ${hint}
       <div class="set-inputs">
         <div class="input-group">
           <label>Gewicht (kg)</label>
-          <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${placeholder}" id="w-${i}" />
+          <input type="number" inputmode="decimal" step="0.5" min="0" value="${prefill}" placeholder="—" id="w-${i}" />
         </div>
         <div class="input-group">
           <label>Wdh.</label>
-          <input type="number" inputmode="numeric" min="1" placeholder="${phase.repsMin}" id="r-${i}" />
+          <input type="number" inputmode="numeric" min="1" value="${last ? last.reps : ''}" placeholder="${phase.repsMin}" id="r-${i}" />
         </div>
         <div class="input-group">
           <label>Sätze</label>
@@ -332,12 +378,45 @@ function renderExercises() {
         <span class="rpe-value" id="rpev-${i}">7</span>
       </div>
       <div class="ex-actions">
-        <button class="btn-skip" onclick="openAltModal(${i},'${ex.name}')">Nicht machbar</button>
-        <button class="btn-done" onclick="markDone(${i},'${ex.name}')">✓ Geschafft</button>
+        <button class="btn-skip" onclick="openAltModal(${i},'${safeName}')">Nicht machbar</button>
+        <button class="btn-done" onclick="markDone(${i},'${safeName}')">✓ Geschafft</button>
       </div>
     `;
     list.appendChild(div);
   });
+
+  // "+ Übung hinzufügen" Button
+  const addBtn = document.createElement('button');
+  addBtn.className = 'btn-add-ex';
+  addBtn.textContent = '+ Eigene Übung hinzufügen';
+  addBtn.onclick = addCustomExercise;
+  list.appendChild(addBtn);
+}
+
+// Eigene Übung zum aktuell gewählten Tag hinzufügen
+function addCustomExercise() {
+  if (!selectedDay) { showToast('Bitte zuerst einen Tag wählen', '#e65100'); return; }
+  const name = prompt('Name der Übung (z. B. "Glute Kickback Maschine"):');
+  if (!name || !name.trim()) return;
+  const data = loadData();
+  const clean = name.trim();
+  const exists = getDayExercises(selectedDay, data).some(e => e.name.toLowerCase() === clean.toLowerCase());
+  if (exists) { showToast('Übung existiert bereits an diesem Tag', '#e65100'); return; }
+  data.customExercises[selectedDay].push({ name: clean, target: '3×12', tag: 'Eigene Übung' });
+  saveData(data);
+  showToast(`✓ "${clean}" hinzugefügt`, '#b5338a');
+  renderExercises();
+}
+
+// Eigene Übung entfernen
+function removeCustomExercise(name) {
+  if (!selectedDay) return;
+  if (!confirm(`Übung "${name}" entfernen?`)) return;
+  const data = loadData();
+  data.customExercises[selectedDay] = data.customExercises[selectedDay].filter(e => e.name !== name);
+  saveData(data);
+  showToast('Übung entfernt', '#6b6b6b');
+  renderExercises();
 }
 
 function markDone(idx, name) {
@@ -393,7 +472,7 @@ function saveWorkout() {
   const phase   = currentPhase();
   const exercises = [];
 
-  TRAINING_DAYS[selectedDay].exercises.forEach((ex, i) => {
+  getDayExercises(selectedDay, data).forEach((ex, i) => {
     const card     = document.getElementById('ex-' + i);
     const skipped  = card.classList.contains('skipped');
     const altName  = card.dataset.altName || null;
