@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v35';
+const APP_VERSION = 'v36';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -2397,7 +2397,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const st = document.getElementById('skin-toggle');
   if (st) st.addEventListener('click', toggleSkin);
 
-  document.querySelectorAll('.app-version').forEach(el => { el.textContent = `FitnessTrainer · ${APP_VERSION}`; });
+  document.querySelectorAll('.app-version').forEach(el => { el.textContent = `Strong Gnome · ${APP_VERSION}`; });
 
   initFirebase();   // entscheidet: Login / Onboarding / App
 });

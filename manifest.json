@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Mein Fitness-Trainer",
-  "short_name": "FitnessTrainer",
-  "description": "Personalisierter Trainingsplan — Po-Aufbau & Abnehmen",
+  "name": "Strong Gnome",
+  "short_name": "Strong Gnome",
+  "description": "Strong Gnome — dein Trainingsplan, Tracking & Fortschritt. Klein, aber bärenstark.",
   "lang": "de",
   "dir": "ltr",
   "start_url": "./index.html",
