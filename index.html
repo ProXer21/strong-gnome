@@ -33,7 +33,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
-  <link rel="stylesheet" href="./style.css?v=26" />
+  <link rel="stylesheet" href="./style.css?v=27" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -588,6 +588,30 @@
   <div id="friends-body"></div>
 </section>
 
+<!-- ─── Gruppentraining (Live-Session) ────────────────────────────────── -->
+<section id="page-group" class="page">
+  <div class="workout-bar">
+    <button class="btn-back" onclick="leaveGroupSession()" aria-label="Verlassen">✕</button>
+    <div class="wb-center">
+      <div class="wb-title" id="grp-title">Gruppentraining</div>
+      <div class="wb-timer" id="grp-sub">—</div>
+    </div>
+    <button class="wb-finish" onclick="finishGroupSession()">Fertig</button>
+  </div>
+  <div id="group-body"></div>
+  <button class="save-workout-btn" onclick="finishGroupSession()">Mein Training speichern &amp; beenden</button>
+</section>
+
+<!-- ─── Gruppentraining: Plan wählen ──────────────────────────────────── -->
+<div id="group-plan-modal" class="modal-overlay" onclick="if(event.target===this)closeGroupPlanModal()">
+  <div class="modal">
+    <h3 id="gpm-title">Gemeinsam trainieren</h3>
+    <p>Welchen Trainingsplan wollt ihr zusammen machen?</p>
+    <div class="menu-list" id="gpm-plans"></div>
+    <button class="btn-skip-all" onclick="closeGroupPlanModal()">Abbrechen</button>
+  </div>
+</div>
+
 <!-- ─── Navigation ────────────────────────────────────────────────────── -->
 <nav>
   <button class="nav-btn active" data-page="dashboard" aria-label="Start">
@@ -622,6 +646,6 @@
   </button>
 </nav>
 
-<script src="./app.js?v=31"></script>
+<script src="./app.js?v=32"></script>
 </body>
 </html>

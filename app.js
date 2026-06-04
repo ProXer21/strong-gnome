@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v31';
+const APP_VERSION = 'v32';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -1603,6 +1603,7 @@ function attachUserDoc(user) {
     startUserListener();
     syncPublicProfile();        // öffentliches Profil aktuell halten
     startSocialListeners();     // Freundes-Anfragen/Posteingang live
+    processFinishedGroupSessions(); // abgeschlossene Gruppentrainings übernehmen
     routeAfterAuth(user);
   }).catch(() => { setSyncStatus('offline'); routeAfterAuth(user); });
 }
@@ -1762,16 +1763,25 @@ function drawSocial() {
     });
   }
 
-  // Posteingang (Pläne, die mir gesendet wurden)
+  // Posteingang (Pläne + Gruppen-Einladungen)
   if (inboxCache.length) {
     html += '<div class="section-label">Posteingang</div>';
     inboxCache.forEach(it => {
-      html += `<div class="social-card">
-        <div class="sc-info"><h3>${escapeHtml(it.plan?.name || 'Plan')}</h3><p>von ${escapeHtml(it.fromName || '?')}</p></div>
-        <div class="sc-actions">
-          <button class="sc-accept" onclick='acceptInboxPlan(${JSON.stringify(it).replace(/'/g, "&#39;")})'>Übernehmen</button>
-          <button class="sc-decline" onclick="dismissInbox('${it.id}')">✕</button>
-        </div></div>`;
+      if (it.type === 'groupInvite') {
+        html += `<div class="social-card">
+          <div class="sc-info"><h3>🏋️ Gruppentraining</h3><p>${escapeHtml(it.fromName || '?')} · „${escapeHtml(it.routineName || 'Training')}"</p></div>
+          <div class="sc-actions">
+            <button class="sc-accept" onclick="acceptGroupInvite('${it.sessionId}','${it.id}')">Beitreten</button>
+            <button class="sc-decline" onclick="dismissInbox('${it.id}')">✕</button>
+          </div></div>`;
+      } else {
+        html += `<div class="social-card">
+          <div class="sc-info"><h3>${escapeHtml(it.plan?.name || 'Plan')}</h3><p>von ${escapeHtml(it.fromName || '?')}</p></div>
+          <div class="sc-actions">
+            <button class="sc-accept" onclick='acceptInboxPlan(${JSON.stringify(it).replace(/'/g, "&#39;")})'>Übernehmen</button>
+            <button class="sc-decline" onclick="dismissInbox('${it.id}')">✕</button>
+          </div></div>`;
+      }
     });
   }
 
@@ -1793,6 +1803,7 @@ function drawSocial() {
             <p>${fmtLastWorkout(f.lastWorkout)} · ${f.workoutsThisMonth || 0} Trainings diesen Monat</p>
           </div>
         </div>
+        <button class="fc-group-btn" onclick="startGroupTraining('${f.uid}','${escapeHtml(f.name || 'Freund')}')">🏋️ Gemeinsam trainieren</button>
         <div class="fc-plans"><div class="fp-title">Trainingspläne</div>${plans}</div>
       </div>`;
     });
@@ -1889,6 +1900,202 @@ function acceptInboxPlan(item) {
 function dismissInbox(id) {
   if (!socialAvailable()) return;
   try { fsdb().collection('users').doc(currentUid).collection('inbox').doc(id).delete().then(renderFriends); } catch (e) {}
+}
+
+// ─── Gruppentraining (gemeinsame Live-Session) ────────────────────────────────
+
+let groupSession = null, groupSessionId = null, _grpUnsub = null, _grpSaveT = null, _grpPickFriend = null;
+const _finalizedGroupSessions = new Set();
+const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+// 1) Host wählt einen Plan
+function startGroupTraining(friendUid, friendName) {
+  if (!socialAvailable()) { showToast('Nur mit Cloud-Konto', '#c46a04'); return; }
+  _grpPickFriend = { uid: friendUid, name: friendName };
+  const data = loadData();
+  document.getElementById('gpm-title').textContent = 'Mit ' + friendName + ' trainieren';
+  const list = document.getElementById('gpm-plans');
+  list.innerHTML = (data.routines || []).map(r =>
+    `<button class="menu-item" onclick="createGroupSession('${r.id}')">${escapeHtml(r.emoji || '🏋️')} ${escapeHtml(r.name)}</button>`).join('')
+    || '<p style="color:var(--text-muted)">Du hast noch keine Trainingspläne.</p>';
+  document.getElementById('group-plan-modal').classList.add('open');
+}
+function closeGroupPlanModal() { document.getElementById('group-plan-modal').classList.remove('open'); }
+
+// 2) Session anlegen + Einladung senden
+async function createGroupSession(routineId) {
+  closeGroupPlanModal();
+  const data = loadData();
+  const r = (data.routines || []).find(x => x.id === routineId);
+  if (!r || !_grpPickFriend) return;
+  const me = currentUid, friend = _grpPickFriend.uid;
+  const mkSets = ex => { const a = []; for (let i = 0; i < (ex.sets || 3); i++) a.push({ weight: '', reps: ex.repsMin || 10, done: false }); return a; };
+  const exercises = r.exercises.map(ex => ({
+    name: ex.name, tag: ex.tag || '', repsMin: ex.repsMin || 10, repsMax: ex.repsMax || 12,
+    sets: { [me]: mkSets(ex), [friend]: mkSets(ex) },
+  }));
+  const docData = {
+    members: [me, friend],
+    membersInfo: { [me]: { name: pName(data) }, [friend]: { name: _grpPickFriend.name } },
+    host: me, routineName: r.name, status: 'active', startTs: Date.now(), exercises, saved: {}, createdAt: Date.now(),
+  };
+  try {
+    const ref = await fsdb().collection('groupSessions').add(docData);
+    await fsdb().collection('users').doc(friend).collection('inbox').add({
+      type: 'groupInvite', sessionId: ref.id, fromUid: me, fromName: pName(data), routineName: r.name, ts: Date.now(),
+    });
+    openGroupSession(ref.id);
+    showToast('Gruppentraining gestartet — Einladung gesendet 📨');
+  } catch (e) { showToast('Fehler beim Start', '#c0392b'); }
+}
+
+// 3) Freund nimmt Einladung an
+async function acceptGroupInvite(sessionId, inboxId) {
+  try { await fsdb().collection('users').doc(currentUid).collection('inbox').doc(inboxId).delete(); } catch (e) {}
+  openGroupSession(sessionId);
+}
+
+// 4) Live-Session öffnen (beide hören auf dasselbe Dokument)
+function openGroupSession(sid) {
+  groupSessionId = sid;
+  if (_grpUnsub) { try { _grpUnsub(); } catch (e) {} }
+  navigate('group');
+  _grpUnsub = fsdb().collection('groupSessions').doc(sid).onSnapshot(snap => {
+    if (!snap.exists) { showToast('Session wurde beendet'); _closeGroup(); return; }
+    groupSession = snap.data();
+    if (groupSession.status === 'done') finalizeGroupForMe();
+    const ae = document.activeElement;
+    const typing = ae && ae.closest && ae.closest('#group-body');   // beim Tippen nicht neu rendern
+    if (!typing) renderGroupSession();
+  }, () => showToast('Verbindungsfehler', '#c0392b'));
+}
+
+function renderGroupSession() {
+  if (!groupSession) return;
+  const me = currentUid;
+  const names = groupSession.membersInfo || {};
+  document.getElementById('grp-title').textContent = groupSession.routineName || 'Gruppentraining';
+  document.getElementById('grp-sub').textContent = (groupSession.members || []).map(u => (names[u]?.name) || '?').join('  ·  ');
+  const members = [me, ...(groupSession.members || []).filter(u => u !== me)];
+  const body = document.getElementById('group-body');
+  body.innerHTML = (groupSession.exercises || []).map((ex, ei) => {
+    const cols = members.map(u => {
+      const isMe = u === me;
+      const sets = (ex.sets && ex.sets[u]) || [];
+      const rows = sets.map((s, si) => `
+        <div class="gset-row${s.done ? ' done' : ''}">
+          <span class="gs-num">${si + 1}</span>
+          <input class="sr-input" type="number" inputmode="decimal" step="0.5" min="0" value="${s.weight}" placeholder="kg"
+            oninput="groupSetVal(${ei},'${u}',${si},'weight',this.value)" aria-label="Gewicht">
+          <input class="sr-input" type="number" inputmode="numeric" min="0" value="${s.reps}" placeholder="Wdh"
+            oninput="groupSetVal(${ei},'${u}',${si},'reps',this.value)" aria-label="Wiederholungen">
+          <button class="sr-check" onclick="groupToggleSet(${ei},'${u}',${si})" aria-label="Satz erledigt">${CHECK_SVG}</button>
+        </div>`).join('');
+      return `<div class="gcol${isMe ? ' me' : ''}">
+        <div class="gcol-name">${escapeHtml((names[u]?.name) || '?')}${isMe ? ' <span class="gcol-you">Du</span>' : ''}</div>
+        ${rows}
+        <button class="g-addset" onclick="groupAddSet(${ei},'${u}')">+ Satz</button>
+      </div>`;
+    }).join('');
+    return `<div class="exercise-entry group-ex">
+      <div class="ex-header"><div class="ex-info"><h3>${escapeHtml(ex.name)}</h3><p>Ziel: ${ex.repsMin}–${ex.repsMax} Wdh.</p></div></div>
+      <div class="gcols">${cols}</div>
+    </div>`;
+  }).join('');
+}
+
+function groupSetVal(ei, u, si, field, value) {
+  if (!groupSession) return;
+  const s = groupSession.exercises[ei].sets[u][si];
+  s[field] = field === 'weight' ? (parseFloat(value) || 0) : (parseInt(value) || 0);
+  saveGroupSoon();
+}
+function groupToggleSet(ei, u, si) {
+  if (!groupSession) return;
+  const s = groupSession.exercises[ei].sets[u][si];
+  s.done = !s.done;
+  renderGroupSession(); saveGroupSoon();
+}
+function groupAddSet(ei, u) {
+  if (!groupSession) return;
+  const arr = groupSession.exercises[ei].sets[u];
+  const last = arr[arr.length - 1];
+  arr.push({ weight: last ? last.weight : '', reps: last ? last.reps : (groupSession.exercises[ei].repsMin || 10), done: false });
+  renderGroupSession(); saveGroupSoon();
+}
+function saveGroupSoon() { clearTimeout(_grpSaveT); _grpSaveT = setTimeout(saveGroupNow, 700); }
+function saveGroupNow() {
+  if (!groupSession || !groupSessionId) return;
+  fsdb().collection('groupSessions').doc(groupSessionId).set(groupSession).catch(() => {});
+}
+
+// Eigene Spalte in den EIGENEN Verlauf schreiben
+function saveGroupColumnToHistory(session) {
+  const data = loadData(), me = currentUid;
+  const exercises = [];
+  (session.exercises || []).forEach(ex => {
+    const sets = ((ex.sets && ex.sets[me]) || []).filter(s => s.done).map(s => ({ weight: +s.weight || 0, reps: +s.reps || 0, rpe: 7 }));
+    if (sets.length) exercises.push({ name: ex.name, tag: ex.tag || '', skipped: false, alternative: null, note: '', sets });
+  });
+  if (!exercises.length) return false;
+  data.workouts.push({
+    date: today(), durationSec: session.startTs ? Math.floor((Date.now() - session.startTs) / 1000) : 0,
+    routineId: null, routineName: (session.routineName || 'Gruppentraining') + ' 👥', exercises,
+  });
+  saveData(data); syncPublicProfile();
+  return true;
+}
+
+// Wird ausgelöst, wenn die Session auf "done" springt, während ich drin bin
+function finalizeGroupForMe() {
+  if (!groupSession || groupSession.status !== 'done' || _finalizedGroupSessions.has(groupSessionId)) return;
+  _finalizedGroupSessions.add(groupSessionId);
+  if (!(groupSession.saved && groupSession.saved[currentUid])) {
+    saveGroupColumnToHistory(groupSession);
+    fsdb().collection('groupSessions').doc(groupSessionId).set({ saved: { [currentUid]: true } }, { merge: true }).catch(() => {});
+    showToast('Werte in deinen Verlauf übernommen ✓');
+  }
+}
+
+function finishGroupSession() {
+  if (!groupSession) { _closeGroup(); return; }
+  if (!_finalizedGroupSessions.has(groupSessionId)) {
+    saveGroupColumnToHistory(groupSession);
+    _finalizedGroupSessions.add(groupSessionId);
+  }
+  groupSession.status = 'done';
+  groupSession.saved = { ...(groupSession.saved || {}), [currentUid]: true };
+  clearTimeout(_grpSaveT); saveGroupNow();
+  showToast('🎉 Training gespeichert!');
+  _closeGroup();
+}
+
+function leaveGroupSession() {
+  if (groupSession && groupSession.status === 'active') {
+    if (!confirm('Gruppentraining verlassen? Deine bisherigen Eingaben bleiben in der Session erhalten.')) return;
+  }
+  _closeGroup();
+}
+function _closeGroup() {
+  if (_grpUnsub) { try { _grpUnsub(); } catch (e) {} _grpUnsub = null; }
+  groupSession = null; groupSessionId = null;
+  navigate('friends');
+}
+
+// Beim Login: abgeschlossene Gruppen-Sessions, die ich noch nicht gespeichert habe, übernehmen
+async function processFinishedGroupSessions() {
+  if (!socialAvailable()) return;
+  try {
+    const snap = await fsdb().collection('groupSessions').where('members', 'array-contains', currentUid).get();
+    for (const d of snap.docs) {
+      const s = d.data();
+      if (s.status === 'done' && (!s.saved || !s.saved[currentUid]) && !_finalizedGroupSessions.has(d.id)) {
+        if (saveGroupColumnToHistory(s)) showToast('Gruppentraining in deinen Verlauf übernommen ✓');
+        _finalizedGroupSessions.add(d.id);
+        try { await fsdb().collection('groupSessions').doc(d.id).set({ saved: { ...(s.saved || {}), [currentUid]: true } }, { merge: true }); } catch (e) {}
+      }
+    }
+  } catch (e) {}
 }
 
 // ─── Auth-UI / Routing ──────────────────────────────────────────────────────

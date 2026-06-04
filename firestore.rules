@@ -32,11 +32,17 @@ service cloud.firestore {
         allow create:       if request.auth != null;
       }
 
-      // Posteingang (zugeschickte Pläne): jeder Auth. darf zustellen, Besitzer liest/löscht
+      // Posteingang (zugeschickte Pläne / Gruppen-Einladungen): jeder Auth. darf zustellen, Besitzer liest/löscht
       match /inbox/{itemId} {
         allow read, delete: if request.auth != null && request.auth.uid == uid;
         allow create:       if request.auth != null;
       }
+    }
+
+    // Gemeinsame Trainings-Sessions: nur Teilnehmer (members[]) dürfen lesen/schreiben
+    match /groupSessions/{sid} {
+      allow create: if request.auth != null && request.auth.uid in request.resource.data.members;
+      allow read, update, delete: if request.auth != null && request.auth.uid in resource.data.members;
     }
   }
 }
