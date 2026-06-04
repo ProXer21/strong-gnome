@@ -570,16 +570,19 @@ function renderActiveWorkout() {
       const prev = previousSet(ex.name, si, data);
       const prevTxt = prev ? `${prev.weight}kg × ${prev.reps}` : '—';
       return `
-        <div class="set-row${set.done ? ' done' : ''}" id="set-${ei}-${si}">
-          <span class="sr-num">${si + 1}</span>
-          <span class="sr-prev">${prevTxt}</span>
-          <input class="sr-input" type="number" inputmode="decimal" step="0.5" min="0" value="${set.weight}"
-            placeholder="kg" oninput="setVal(${ei},${si},'weight',this.value)" aria-label="Gewicht Satz ${si + 1}">
-          <input class="sr-input" type="number" inputmode="numeric" min="0" value="${set.reps}"
-            placeholder="Wdh" oninput="setVal(${ei},${si},'reps',this.value)" aria-label="Wiederholungen Satz ${si + 1}">
-          <button class="sr-check" onclick="toggleSet(${ei},${si})" aria-label="Satz erledigt">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-          </button>
+        <div class="set-wrap">
+          <button class="set-delete" onclick="removeSet(${ei},${si})" aria-label="Satz löschen">Löschen</button>
+          <div class="set-row${set.done ? ' done' : ''}" id="set-${ei}-${si}">
+            <span class="sr-num">${si + 1}</span>
+            <span class="sr-prev">${prevTxt}</span>
+            <input class="sr-input" type="number" inputmode="decimal" step="0.5" min="0" value="${set.weight}"
+              placeholder="kg" oninput="setVal(${ei},${si},'weight',this.value)" aria-label="Gewicht Satz ${si + 1}">
+            <input class="sr-input" type="number" inputmode="numeric" min="0" value="${set.reps}"
+              placeholder="Wdh" oninput="setVal(${ei},${si},'reps',this.value)" aria-label="Wiederholungen Satz ${si + 1}">
+            <button class="sr-check" onclick="toggleSet(${ei},${si})" aria-label="Satz erledigt">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            </button>
+          </div>
         </div>`;
     }).join('');
 
@@ -602,6 +605,70 @@ function renderActiveWorkout() {
       </div>`;
     body.appendChild(card);
   });
+
+  attachSetSwipe();
+}
+
+// Satz-Zeilen: nach links wischen → roter „Löschen"-Button
+function closeAllSwipes(except) {
+  document.querySelectorAll('.set-wrap.open').forEach(w => {
+    if (w === except) return;
+    w.classList.remove('open');
+    const r = w.querySelector('.set-row');
+    if (r) r.style.transform = '';
+  });
+}
+
+function attachSetSwipe() {
+  const OPEN = -88;
+  document.querySelectorAll('.set-wrap').forEach(wrap => {
+    const row = wrap.querySelector('.set-row');
+    if (!row) return;
+    let sx = 0, sy = 0, dx = 0, decided = false, horiz = false, active = false;
+
+    row.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      sx = t.clientX; sy = t.clientY; dx = 0;
+      decided = false; horiz = false; active = true;
+      row.style.transition = 'none';
+      closeAllSwipes(wrap);
+    }, { passive: true });
+
+    row.addEventListener('touchmove', e => {
+      if (!active) return;
+      const t = e.touches[0];
+      const mx = t.clientX - sx, my = t.clientY - sy;
+      if (!decided && (Math.abs(mx) > 8 || Math.abs(my) > 8)) {
+        decided = true; horiz = Math.abs(mx) > Math.abs(my);
+      }
+      if (horiz) {
+        e.preventDefault();
+        dx = Math.max(-110, Math.min(0, mx));
+        row.style.transform = `translateX(${dx}px)`;
+      }
+    }, { passive: false });
+
+    const end = () => {
+      if (!active) return;
+      active = false;
+      row.style.transition = 'transform .2s ease';
+      if (horiz && dx < OPEN / 2) {
+        row.style.transform = `translateX(${OPEN}px)`;
+        wrap.classList.add('open');
+      } else {
+        row.style.transform = '';
+        wrap.classList.remove('open');
+      }
+    };
+    row.addEventListener('touchend', end);
+    row.addEventListener('touchcancel', end);
+  });
+}
+
+function removeSet(ei, si) {
+  if (!session) return;
+  session.exercises[ei].sets.splice(si, 1);
+  renderActiveWorkout();
 }
 
 function setVal(ei, si, field, value) {
