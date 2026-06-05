@@ -1,7 +1,7 @@
 'use strict';
 
 // App-Version (bei jedem Release hochzählen — auch in index.html/sw.js Cache-Buster)
-const APP_VERSION = 'v1.1.0';
+const APP_VERSION = 'v1.2.0';
 
 // ─── Konstanten ─────────────────────────────────────────────────────────────
 
@@ -583,6 +583,20 @@ function renderDashboard() {
     document.getElementById('dn-rem').classList.toggle('over', rem < 0);
     document.getElementById('dn-bar').style.width = pct + '%';
     document.getElementById('dn-bar').style.background = rem < 0 ? 'var(--danger)' : 'var(--grad-primary)';
+  }
+
+  // Schnellzugriff: Mahlzeiten untereinander (wie im Essen-Reiter) → tippen = Detail, „+" = direkt einfügen
+  const dashMeals = document.getElementById('dash-meals');
+  if (dashMeals) {
+    const goals = nutEffectiveGoals(data);
+    const todayE = nutDayEntries(data, nutToday());
+    dashMeals.innerHTML = MEALS.map(meal => {
+      const entries = todayE.filter(e => e.meal === meal.key);
+      const sub = entries.reduce((s, e) => s + (+e.kcal || 0), 0);
+      const items = entries.map(e => e.name).filter(Boolean);
+      return nutMealCardMarkup(meal, sub, nutMealGoal(goals, meal.key), items,
+        `openMealQuick('${meal.key}')`, `addMealQuick('${meal.key}')`);
+    }).join('');
   }
 }
 
@@ -1237,6 +1251,7 @@ function finishWorkout() {
   clearInterval(window._sessTimer);
   stopRest(false);
   syncPublicProfile();   // letztes Training / Fortschritt für Freunde aktualisieren
+  bumpPublicStat({ workouts: INC(1) });   // öffentlicher Workout-Zähler
   showToast('🎉 Training gespeichert!');
   setTimeout(() => navigate('dashboard'), 1200);
 }
@@ -1789,6 +1804,16 @@ function syncPublicProfile() {
     lastWorkout, workoutsThisMonth, plans, updatedAt: Date.now(),
   }, { merge: true }).catch(() => {});
 }
+
+// Öffentlicher, anonymer Zähler (stats/public) fürs Roadmap-„Nutzung"-Panel.
+// Enthält NUR aggregierte Zahlen (Nutzer-/Workout-Anzahl, Zeitpunkt) — keine PII.
+function bumpPublicStat(updates) {
+  try {
+    if (!socialAvailable() || typeof firebase === 'undefined' || !firebase.firestore || !firebase.firestore.FieldValue) return;
+    fsdb().collection('stats').doc('public').set(updates, { merge: true }).catch(() => {});
+  } catch (e) {}
+}
+function INC(n) { return firebase.firestore.FieldValue.increment(n || 1); }
 
 // Echtzeit-Listener für Anfragen / Posteingang → Badge + Live-Update der Seite
 function startSocialListeners() {
@@ -2368,6 +2393,11 @@ function saveOnboarding() {
   saveData(data);
   applyTheme(data.settings.theme);
   notifySignup(name);   // Entwickler per E-Mail über neue Registrierung informieren
+  // öffentlicher Nutzer-Zähler — pro Konto nur einmal
+  try {
+    const k = 'statUserCounted_' + (currentUid || 'local');
+    if (!localStorage.getItem(k)) { localStorage.setItem(k, '1'); bumpPublicStat({ users: INC(1), lastSignup: Date.now() }); }
+  } catch (e) {}
   enterApp();
   showToast(`Willkommen, ${name}! 💪`);
 }
@@ -2402,6 +2432,10 @@ const MACROS = [
   { key: 'carbs',   label: 'Kohlenhydrate', short: 'KH', color: 'var(--amber)' },
   { key: 'fat',     label: 'Fett', short: 'F', color: 'var(--mint)' },
 ];
+// Tagesziel-Aufteilung pro Mahlzeit (Summe = 1) → gibt jeder Mahlzeit ein eigenes kcal-Ziel
+const MEAL_GOAL_RATIO = { breakfast: 0.30, lunch: 0.35, dinner: 0.25, snack: 0.10 };
+// Erweiterte Nährwerte (so weit Open Food Facts sie liefert) — werden optional je Eintrag gespeichert
+const EXT_KEYS = ['fiber', 'sugar', 'satfat', 'salt', 'sodium'];
 
 // Lokales Datum als YYYY-MM-DD (NICHT toISOString → das wäre UTC und nachts um den Vortag verschoben)
 function nutISO(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
@@ -2409,6 +2443,9 @@ function nutToday() { return nutISO(new Date()); }
 
 let nutDate = nutToday();       // aktuell angezeigter Tag (YYYY-MM-DD, lokale Zeit)
 let nutModalMeal = null;        // Mahlzeit, zu der gerade hinzugefügt wird
+let nutPer100 = null;           // „je 100 g"-Referenz eines gewählten Datenbank-Produkts
+let nutServingG = null;         // Gramm pro Portion (falls die Datenbank es kennt)
+let _offTimer = null;           // Debounce-Timer für die Open-Food-Facts-Suche
 
 // Sinnvolle Obergrenzen pro EINTRAG (verhindert absurde Eingaben + Zahlen-Overflow im UI)
 const NUT_MAX_KCAL = 10000;     // kcal je Eintrag (eine riesige Mahlzeit ~3000)
@@ -2456,6 +2493,22 @@ function nutDayTotals(data, date) {
   }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
 }
 
+// Gramm-Wert hübsch (max. 1 Nachkommastelle, de-DE) — z. B. „33,5 g"
+function nutGfmt(v) { return (Math.round((v || 0) * 10) / 10).toLocaleString('de-DE', { maximumFractionDigits: 1 }); }
+// kcal-Ziel einer einzelnen Mahlzeit (Tagesziel × Anteil)
+function nutMealGoal(goals, mealKey) { return Math.round((goals.kcal || 0) * (MEAL_GOAL_RATIO[mealKey] || 0.25)); }
+
+// Mahlzeit zusammenfassen: kcal/Makros + erweiterte Nährwerte (mit „bekannt?"-Flag, da OFF sie nicht immer liefert)
+function nutMealAgg(entries) {
+  const t = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
+  const ext = {}; EXT_KEYS.forEach(k => ext[k] = { val: 0, known: false });
+  entries.forEach(e => {
+    t.kcal += +e.kcal || 0; t.protein += +e.protein || 0; t.carbs += +e.carbs || 0; t.fat += +e.fat || 0;
+    EXT_KEYS.forEach(k => { if (e[k] != null && !isNaN(e[k])) { ext[k].val += +e[k]; ext[k].known = true; } });
+  });
+  return { ...t, ext };
+}
+
 function nutShiftDay(delta) {
   const d = new Date(nutDate + 'T12:00:00');   // Mittag → DST-/Mitternachts-Sprünge vermeiden
   d.setDate(d.getDate() + delta);
@@ -2481,6 +2534,35 @@ function nutGauge(consumed, goal) {
     <circle cx="60" cy="60" r="${r}" class="kg-val" stroke="${stroke}"
       stroke-dasharray="${valLen.toFixed(1)} ${(c - valLen).toFixed(1)}" transform="rotate(135 60 60)"/>
   </svg>`;
+}
+
+// Kleiner Fortschrittsring um das Mahlzeit-Emoji (Karte in der Übersicht)
+function nutMiniRing(pct, over) {
+  const r = 19, c = 2 * Math.PI * r, val = c * Math.min(1, (pct || 0) / 100);
+  const stroke = over ? 'var(--danger)' : 'var(--primary)';
+  return `<svg viewBox="0 0 44 44" class="nm-ring-svg" aria-hidden="true">
+    <circle cx="22" cy="22" r="${r}" class="nmr-track"/>
+    <circle cx="22" cy="22" r="${r}" class="nmr-val" stroke="${stroke}"
+      stroke-dasharray="${val.toFixed(1)} ${(c - val).toFixed(1)}" transform="rotate(-90 22 22)"/>
+  </svg>`;
+}
+
+// Eine Mahlzeit-Karte (Ring + Titel + kcal + Einträge-Vorschau + „+") — geteilt von Essen-Reiter & Start
+function nutMealCardMarkup(meal, sub, mGoal, items, tapCall, plusCall) {
+  const pct = mGoal > 0 ? Math.min(100, Math.round((sub / mGoal) * 100)) : 0;
+  const itemsLbl = items.length
+    ? escapeHtml(items.slice(0, 2).join(', ') + (items.length > 2 ? ` +${items.length - 2}` : ''))
+    : 'Noch nichts erfasst';
+  return `<button type="button" class="nm-card" onclick="${tapCall}">
+    <span class="nm-ring">${nutMiniRing(pct, sub > mGoal)}<span class="nm-emoji">${meal.emoji}</span></span>
+    <span class="nm-mid">
+      <span class="nm-title">${meal.label} <span class="nm-arrow">›</span></span>
+      <span class="nm-kcal">${nutFmt(sub)}${mGoal ? ' / ' + nutFmt(mGoal) : ''} kcal</span>
+      <span class="nm-items">${itemsLbl}</span>
+    </span>
+    <span class="nm-plus" role="button" aria-label="Schnell hinzufügen"
+          onclick="event.stopPropagation(); ${plusCall}">+</span>
+  </button>`;
 }
 
 function renderNutrition() {
@@ -2529,30 +2611,15 @@ function renderNutrition() {
     }).join('');
   }
 
-  // Mahlzeiten
+  // Mahlzeiten — kompakte Karten (Tippen = Detailansicht, „+" = schnell hinzufügen)
   const mealsWrap = document.getElementById('nut-meals');
   if (mealsWrap) {
     mealsWrap.innerHTML = MEALS.map(meal => {
       const entries = nutDayEntries(data, nutDate).filter(e => e.meal === meal.key);
       const sub = entries.reduce((s, e) => s + (+e.kcal || 0), 0);
-      const rows = entries.length ? entries.map(e => `
-        <div class="nut-entry" onclick="openFoodModal('${meal.key}','${e.id}')" role="button">
-          <div class="ne-info">
-            <span class="ne-name">${escapeHtml(e.name || 'Eintrag')}</span>
-            <span class="ne-macros">E ${nutFmt(e.protein)} · KH ${nutFmt(e.carbs)} · F ${nutFmt(e.fat)} g</span>
-          </div>
-          <span class="ne-kcal">${nutFmt(e.kcal)} kcal</span>
-          <button class="ne-del" onclick="event.stopPropagation(); nutDeleteEntry('${e.id}')" aria-label="Eintrag löschen">✕</button>
-        </div>`).join('')
-        : '<div class="nut-empty">Noch nichts erfasst</div>';
-      return `<div class="nut-meal">
-        <div class="nm-head">
-          <span class="nm-title">${meal.emoji} ${meal.label}</span>
-          <span class="nm-sub">${nutFmt(sub)} kcal</span>
-        </div>
-        ${rows}
-        <button class="nm-add" onclick="openFoodModal('${meal.key}')">+ Hinzufügen</button>
-      </div>`;
+      const items = entries.map(e => e.name).filter(Boolean);
+      return nutMealCardMarkup(meal, sub, nutMealGoal(goals, meal.key), items,
+        `openMealDetail('${meal.key}')`, `openFoodModal('${meal.key}')`);
     }).join('');
   }
 
@@ -2561,73 +2628,459 @@ function renderNutrition() {
   if (gi) gi.textContent = data.nutrition.goals.mode === 'auto'
     ? `Automatisches Ziel: ${nutFmt(goals.kcal)} kcal/Tag`
     : `Manuelles Ziel: ${nutFmt(goals.kcal)} kcal/Tag`;
+
+  renderNutWeek(data, goals);
 }
 
-// ── Lebensmittel hinzufügen / bearbeiten (Modal) ──
+let nutWeekChart = null;
+// 7-Tage-Statistik: Ø kcal, erfasste Tage, am-Ziel-Tage, Balkenchart + Ø-Makros
+function renderNutWeek(data, goals) {
+  const card = document.getElementById('nut-stats'); if (!card) return;
+  // letzte 7 Tage (heute zurück)
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const dt = new Date(); dt.setDate(dt.getDate() - i);
+    const iso = nutISO(dt);
+    const t = nutDayTotals(data, iso);
+    days.push({ iso, label: dt.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', ''), ...t });
+  }
+  const logged = days.filter(d => d.kcal > 0);
+  if (!logged.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  const avg = Math.round(logged.reduce((s, d) => s + d.kcal, 0) / logged.length);
+  const onTarget = logged.filter(d => goals.kcal > 0 && d.kcal <= goals.kcal * 1.05).length;
+  document.getElementById('nws-avg').textContent = nutFmt(avg);
+  document.getElementById('nws-days').textContent = logged.length + '/7';
+  document.getElementById('nws-streak').textContent = onTarget + '/' + logged.length;
+
+  const mAvg = k => Math.round(logged.reduce((s, d) => s + d[k], 0) / logged.length);
+  const mw = document.getElementById('nws-macros');
+  if (mw) mw.innerHTML = MACROS.map(m => `<span class="nws-m"><b style="color:${m.color}">${nutFmt(mAvg(m.key))} g</b> ${m.label}</span>`).join('');
+
+  const cv = document.getElementById('nut-week-chart');
+  if (cv && typeof Chart !== 'undefined') {
+    if (nutWeekChart) nutWeekChart.destroy();
+    const css = getComputedStyle(document.documentElement);
+    const primary = css.getPropertyValue('--primary').trim() || '#c42e86';
+    const danger = css.getPropertyValue('--danger').trim() || '#c0392b';
+    const muted = css.getPropertyValue('--text-muted').trim() || '#888';
+    const grid = css.getPropertyValue('--border').trim() || '#eee';
+    nutWeekChart = new Chart(cv, {
+      type: 'bar',
+      data: { labels: days.map(d => d.label),
+        datasets: [{ data: days.map(d => Math.round(d.kcal)),
+          backgroundColor: days.map(d => (goals.kcal > 0 && d.kcal > goals.kcal * 1.05) ? danger : primary),
+          borderRadius: 6, maxBarThickness: 34 }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: c => nutFmt(c.raw) + ' kcal' } } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: grid }, ticks: { color: muted, font: { size: 10 }, callback: v => v >= 1000 ? (v / 1000) + 'k' : v } },
+          x: { grid: { display: false }, ticks: { color: muted, font: { size: 11 } } } },
+        // Ziel-Linie
+        ...(goals.kcal > 0 ? {} : {}) }
+    });
+  }
+}
+
+// ── Mahlzeit-Detail (YAZIO-Stil): alle Einträge + volle Nährwerte ──
+let nutDetailMeal = null;   // gesetzt, solange eine Detailansicht offen ist (Rücksprung-Ziel)
+
+function openMealDetail(mealKey) {
+  const root = document.getElementById('nut-modal-root'); if (!root) return;
+  const meal = MEALS.find(m => m.key === mealKey); if (!meal) return;
+  nutDetailMeal = mealKey;
+  nutModalMeal = mealKey;
+  document.body.classList.add('nut-modal-open');
+  const data = loadData();
+  const goals = nutEffectiveGoals(data);
+  const entries = nutDayEntries(data, nutDate).filter(e => e.meal === mealKey);
+  const agg = nutMealAgg(entries);
+  const mGoal = nutMealGoal(goals, mealKey);
+  const left = mGoal - Math.round(agg.kcal);
+
+  // 4 Übersichts-Kacheln (Mahlzeit-Summe)
+  const tiles = [
+    { v: nutFmt(agg.kcal), l: 'Kalorien', u: 'kcal' },
+    { v: nutGfmt(agg.carbs), l: 'Kohlenhydrate', u: 'g' },
+    { v: nutGfmt(agg.protein), l: 'Eiweiß', u: 'g' },
+    { v: nutGfmt(agg.fat), l: 'Fett', u: 'g' },
+  ].map(t => `<div class="md-tile"><b>${t.v}<small>${t.u}</small></b><span>${t.l}</span></div>`).join('');
+
+  // Einträge der Mahlzeit
+  const foods = entries.length ? entries.map(e => {
+    const macro = `E ${nutFmt(e.protein)} · KH ${nutFmt(e.carbs)} · F ${nutFmt(e.fat)} g`;
+    return `<div class="md-food" onclick="nutEditEntry('${mealKey}','${e.id}')" role="button">
+      <span class="mdf-info"><span class="mdf-name">${escapeHtml(e.name || 'Eintrag')}</span><span class="mdf-sub">${macro}</span></span>
+      <span class="mdf-kcal">${nutFmt(e.kcal)} kcal</span>
+      <button class="mdf-del" onclick="event.stopPropagation(); nutDeleteEntry('${e.id}')" aria-label="Eintrag löschen">✕</button>
+    </div>`;
+  }).join('') : '<div class="md-empty">Noch nichts erfasst — unten hinzufügen.</div>';
+
+  // Nährwert-Tabelle (erweiterte Makros, soweit bekannt)
+  const row = (label, val, unit, sub, known) => `<div class="md-nrow ${sub ? 'sub' : ''}">
+    <span>${label}</span><span>${known === false ? '—' : nutGfmt(val) + ' ' + unit}</span></div>`;
+  const ext = agg.ext;
+  const nutri = `
+    <div class="md-nutri">
+      <h3>Nährwerte</h3>
+      ${row('Kohlenhydrate', agg.carbs, 'g')}
+      ${row('davon Zucker', ext.sugar.val, 'g', true, ext.sugar.known)}
+      ${row('Ballaststoffe', ext.fiber.val, 'g', true, ext.fiber.known)}
+      ${row('Fett', agg.fat, 'g')}
+      ${row('davon gesättigte Fettsäuren', ext.satfat.val, 'g', true, ext.satfat.known)}
+      ${row('Eiweiß', agg.protein, 'g')}
+      ${row('Salz', ext.salt.val, 'g', true, ext.salt.known)}
+      ${row('Natrium', ext.sodium.val, 'g', true, ext.sodium.known)}
+      <p class="md-nutri-hint">Erweiterte Werte stammen aus der Lebensmittel-Datenbank — „—" heißt, der Wert ist dort nicht hinterlegt.</p>
+    </div>`;
+
+  root.innerHTML = `
+  <div class="food-screen md-screen" id="meal-detail">
+    <div class="fs-top">
+      <button class="fs-x" onclick="closeMealDetail()" aria-label="Zurück">‹</button>
+      <h2>${meal.emoji} ${escapeHtml(meal.label)}</h2>
+      <span style="width:40px"></span>
+    </div>
+    <div class="fs-body md-body">
+      <div class="md-summary">
+        <div class="md-bigkcal"><b>${nutFmt(agg.kcal)}</b><span>von ${nutFmt(mGoal)} kcal · ${left >= 0 ? nutFmt(left) + ' übrig' : nutFmt(-left) + ' zu viel'}</span></div>
+        <div class="md-tiles">${tiles}</div>
+      </div>
+      <div class="md-foods">${foods}</div>
+      ${nutri}
+    </div>
+    <button class="md-addbtn" onclick="nutAddToMeal('${mealKey}')">+ Mehr hinzufügen</button>
+  </div>`;
+}
+
+function closeMealDetail() { nutDetailMeal = null; closeFoodModal(); }
+
+// Schnellzugriff vom Start: immer „heute", dann Detailansicht öffnen
+function openMealQuick(mealKey) { nutDate = nutToday(); openMealDetail(mealKey); }
+// Schnellzugriff vom Start: „+" → direkt das Hinzufügen-Vollbild (immer heute)
+function addMealQuick(mealKey) { nutDate = nutToday(); openFoodModal(mealKey); }
+
+// Eintrag aus der Detailansicht bearbeiten (behält die Detail-Rückkehr bei)
+function nutEditEntry(mealKey, entryId) {
+  nutModalMeal = mealKey; nutPer100 = null; nutServingG = null;
+  const data = loadData();
+  const editing = data.nutrition.log.find(e => e.id === entryId);
+  if (editing) renderFoodEditSheet(editing);
+}
+
+// Aus der Detailansicht hinzufügen (Vollbild-Suche, Rücksprung zur Detailansicht über ✕)
+function nutAddToMeal(mealKey) {
+  nutModalMeal = mealKey; nutPer100 = null; nutServingG = null;
+  renderFoodAddScreen(mealKey);
+}
+
+// ✕ in der Vollbild-Suche: zurück zur Detailansicht, falls von dort gekommen — sonst ganz schließen
+function nutAddBack() {
+  if (typeof nutStopScan === 'function') nutStopScan();
+  if (nutDetailMeal) openMealDetail(nutDetailMeal);
+  else closeFoodModal();
+}
+
+// ── Lebensmittel hinzufügen / bearbeiten ──
 function openFoodModal(meal, entryId) {
   nutModalMeal = meal;
+  nutDetailMeal = null;          // Einstieg aus der Übersicht → keine Detail-Rückkehr
+  nutPer100 = null; nutServingG = null;
   const data = loadData();
   const editing = entryId ? data.nutrition.log.find(e => e.id === entryId) : null;
   const root = document.getElementById('nut-modal-root');
   if (!root) return;
-  document.body.classList.add('nut-modal-open');   // Hintergrund-Scroll sperren
+  document.body.classList.add('nut-modal-open');
+  if (editing) { renderFoodEditSheet(editing); return; }   // Bearbeiten = kompaktes Sheet
+  renderFoodAddScreen(meal);                                // Neu = Vollbild-Suche
+}
 
-  const savedFoods = data.nutrition.foods.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de'));
-  // Dropdown-Optionen (kompakt, egal wie viele gespeichert sind)
-  const savedOptions = savedFoods.map(f =>
-    `<option value="${f.id}">${escapeHtml(f.name)} · ${Math.round(f.kcal || 0)} kcal</option>`).join('');
-  // Tipp-Vorschläge beim Eintippen (datalist)
-  const dataListOptions = savedFoods.map(f => `<option value="${escapeHtml(f.name)}">`).join('');
+const FS_ICONS = {
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+  barcode: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14"/><path d="M7 5v14"/><path d="M11 5v14"/><path d="M15 5v14"/><path d="M19 5v14"/><path d="M21 5v14"/></svg>',
+  manual: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+};
 
+// Vollbild-Hinzufügen (Suche · Barcode · Manuell) im großen Kachel-Stil
+function renderFoodAddScreen(meal) {
+  const root = document.getElementById('nut-modal-root');
+  nutSelMode = false; nutSel.clear();
+  const mealLabel = (MEALS.find(m => m.key === meal) || {}).label || 'Mahlzeit';
+  root.innerHTML = `
+  <div class="food-screen" id="food-screen">
+    <div class="fs-top">
+      <button class="fs-x" onclick="nutAddBack()" aria-label="Schließen">${nutDetailMeal ? '‹' : '✕'}</button>
+      <h2>${escapeHtml(mealLabel)}</h2>
+      <span style="width:40px"></span>
+    </div>
+    <div class="fs-methods">
+      <button class="fsm active" id="fsm-search" onclick="foodSetMode('search')"><span class="fsm-ic ic-search">${FS_ICONS.search}</span><span>Suche</span></button>
+      <button class="fsm" onclick="foodSetMode('barcode')"><span class="fsm-ic ic-bc">${FS_ICONS.barcode}</span><span>Barcode</span></button>
+      <button class="fsm" id="fsm-manual" onclick="foodSetMode('manual')"><span class="fsm-ic ic-man">${FS_ICONS.manual}</span><span>Manuell</span></button>
+    </div>
+    <div class="fs-body">
+      <div id="fs-search-pane">
+        <div class="fs-searchbar">
+          <span class="fsb-ic">${FS_ICONS.search}</span>
+          <input id="nf-search" type="search" autocomplete="off" placeholder="${meal === 'snack' ? 'Was hast du gesnackt?' : 'Was hattest du zum ' + escapeHtml(mealLabel) + '?'}" oninput="nutSearchOFF()">
+        </div>
+        <div id="nf-search-results" class="fs-results"></div>
+      </div>
+      <div id="fs-manual-pane" hidden></div>
+    </div>
+  </div>`;
+  nutQuickList();
+  setTimeout(() => document.getElementById('nf-search')?.focus(), 120);
+}
+
+// Manuelles Eingabe-Formular (für „Manuell"-Tab und das Mengen-Sheet wiederverwendet)
+function foodManualFormHTML(prefill, withGrams) {
+  prefill = prefill || {};
+  return `
+    <div class="modal-form">
+      <label>Bezeichnung
+        <input id="nf-name" class="input-field" type="text" autocomplete="off" maxlength="${NUT_MAX_NAME}" placeholder="z. B. Haferflocken mit Milch" value="${escapeHtml(prefill.name || '')}">
+      </label>
+      <div id="nf-grams-wrap" style="${withGrams ? '' : 'display:none'}">
+        <label>Menge <span class="grams-hint">— Werte skalieren automatisch</span></label>
+        <div class="menge-row">
+          <input id="nf-grams" class="input-field" type="number" inputmode="decimal" min="0" max="5000" placeholder="100" oninput="nutGramsRecalc()">
+          <select id="nf-unit" class="input-field" onchange="nutUnitChange()">
+            <option value="g">g</option>
+            <option value="ml">ml</option>
+            <option value="port" id="nf-unit-port" style="display:none">Portion</option>
+          </select>
+        </div>
+      </div>
+      <label>Kalorien (kcal)
+        <input id="nf-kcal" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_KCAL}" placeholder="0" oninput="nutManualEdit()" value="${prefill.kcal != null ? prefill.kcal : ''}">
+      </label>
+      <div class="macro-inputs">
+        <label>Eiweiß (g)<input id="nf-protein" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" placeholder="0" oninput="nutManualEdit()" value="${prefill.protein != null ? prefill.protein : ''}"></label>
+        <label>KH (g)<input id="nf-carbs" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" placeholder="0" oninput="nutManualEdit()" value="${prefill.carbs != null ? prefill.carbs : ''}"></label>
+        <label>Fett (g)<input id="nf-fat" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" placeholder="0" oninput="nutManualEdit()" value="${prefill.fat != null ? prefill.fat : ''}"></label>
+      </div>
+      <label class="chk"><input type="checkbox" id="nf-save"> In „Meine Lebensmittel" speichern</label>
+    </div>
+    <button class="save-workout-btn" onclick="nutSaveEntry(null)">Hinzufügen</button>`;
+}
+
+// Tab wechseln (Manuell-Formular lazy rendern/leeren → keine doppelten IDs mit dem Mengen-Sheet)
+function foodSetMode(mode) {
+  if (mode === 'barcode') { nutScanBarcode(); return; }   // Scan ist eine Aktion, kein Pane
+  document.querySelectorAll('.fsm').forEach(b => b.classList.remove('active'));
+  document.getElementById(mode === 'manual' ? 'fsm-manual' : 'fsm-search')?.classList.add('active');
+  const sp = document.getElementById('fs-search-pane'), mp = document.getElementById('fs-manual-pane');
+  if (mode === 'manual') {
+    if (mp && !mp.innerHTML.trim()) mp.innerHTML = foodManualFormHTML();
+    if (sp) sp.hidden = true; if (mp) mp.hidden = false;
+    setTimeout(() => document.getElementById('nf-name')?.focus(), 60);
+  } else {
+    if (mp) { mp.hidden = true; mp.innerHTML = ''; }
+    if (sp) sp.hidden = false;
+  }
+}
+
+// Auswahl-Modus für „Meine Lebensmittel" (Long-Press → mehrere markieren → löschen)
+let nutSelMode = false;
+let nutSel = new Set();
+
+// Gespeicherte Lebensmittel als Schnellliste (bei leerer Suche)
+function nutQuickList() {
+  const box = document.getElementById('nf-search-results'); if (!box) return;
+  const data = loadData();
+  const foods = data.nutrition.foods.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de'));
+  window._savedCache = {};
+  if (!foods.length) {
+    nutSelMode = false; nutSel.clear();
+    box.innerHTML = '<div class="fs-hint">Suche ein Lebensmittel oder scanne einen Barcode — oder trage es über „Manuell" ein.</div>';
+    return;
+  }
+  foods.forEach(f => { window._savedCache[f.id] = f; });
+  // nicht mehr existierende Auswahl bereinigen
+  [...nutSel].forEach(id => { if (!foods.some(f => f.id === id)) nutSel.delete(id); });
+
+  const head = nutSelMode
+    ? `<div class="fs-selbar">
+         <button class="selbar-x" onclick="nutCancelSelect()" aria-label="Abbrechen">✕</button>
+         <span>${nutSel.size} ausgewählt</span>
+         <button class="selbar-del" onclick="nutDeleteSelected()" ${nutSel.size ? '' : 'disabled'}>Löschen</button>
+       </div>`
+    : `<div class="fs-listhead">Meine Lebensmittel <span class="fs-hinttiny">· lang drücken zum Auswählen</span></div>`;
+
+  box.innerHTML = head + foods.map(f => {
+    const sel = nutSel.has(f.id);
+    return `<div class="fs-item saved-item${sel ? ' sel' : ''}" data-fid="${f.id}" role="button">
+      ${nutSelMode ? `<span class="fi-check${sel ? ' on' : ''}"></span>` : ''}
+      <span class="fi-info"><span class="fi-name">${escapeHtml(f.name)}</span>
+        <span class="fi-sub">E ${nutFmt(f.protein)} · KH ${nutFmt(f.carbs)} · F ${nutFmt(f.fat)} g</span></span>
+      ${nutSelMode ? '' : `<span class="fi-kcal">${Math.round(f.kcal || 0)} kcal</span><span class="fi-plus" aria-hidden="true">+</span>`}
+    </div>`;
+  }).join('');
+
+  box.querySelectorAll('.saved-item').forEach(nutAttachSavedHandlers);
+}
+
+// Klick + Long-Press an einer gespeicherten Zeile
+function nutAttachSavedHandlers(el) {
+  const fid = el.dataset.fid;
+  let timer = null, longed = false;
+  const start = () => { longed = false; timer = setTimeout(() => { longed = true; nutEnterSelect(fid); }, 450); };
+  const cancel = () => clearTimeout(timer);
+  el.addEventListener('pointerdown', start);
+  el.addEventListener('pointerup', cancel);
+  el.addEventListener('pointermove', cancel);
+  el.addEventListener('pointercancel', cancel);
+  el.addEventListener('pointerleave', cancel);
+  el.addEventListener('click', () => {
+    if (longed) { longed = false; return; }   // Long-Press hat schon Auswahl gestartet
+    if (nutSelMode) nutToggleSel(fid);
+    else nutOpenQty('sv:' + fid);
+  });
+}
+
+function nutEnterSelect(fid) {
+  nutSelMode = true; nutSel = new Set([fid]);
+  try { navigator.vibrate && navigator.vibrate(25); } catch (e) {}
+  nutQuickList();
+}
+function nutToggleSel(fid) {
+  if (nutSel.has(fid)) nutSel.delete(fid); else nutSel.add(fid);
+  nutQuickList();
+}
+function nutCancelSelect() { nutSelMode = false; nutSel.clear(); nutQuickList(); }
+function nutDeleteSelected() {
+  if (!nutSel.size) return;
+  if (!confirm(`${nutSel.size} Lebensmittel aus „Meine Lebensmittel" löschen?`)) return;
+  const data = loadData();
+  data.nutrition.foods = (data.nutrition.foods || []).filter(f => !nutSel.has(f.id));
+  saveData(data);
+  const n = nutSel.size;
+  nutSelMode = false; nutSel.clear();
+  nutQuickList();
+  showToast(`${n} gelöscht`, '#6d5a67');
+}
+
+// Eine Ergebnis-Zeile (Name · Portion · kcal · +)
+function foodItemHTML(ref, name, sub, kcal) {
+  return `<button type="button" class="fs-item" onclick="nutOpenQty('${ref}')">
+    <span class="fi-info"><span class="fi-name">${escapeHtml(name)}</span><span class="fi-sub">${escapeHtml(sub)}</span></span>
+    <span class="fi-kcal">${kcal} kcal</span>
+    <span class="fi-plus" aria-hidden="true">+</span>
+  </button>`;
+}
+
+// Mengen-Sheet für ein gewähltes Lebensmittel (Datenbank-Treffer oder gespeichert)
+function nutOpenQty(ref) {
+  const root = document.getElementById('nut-modal-root');
+  let base = null, servingG = null;
+  if (ref.startsWith('off:')) { const f = (window._offCache || {})[ref.slice(4)]; if (f) { base = f; servingG = (f.servingG > 0 ? f.servingG : null); } }
+  else if (ref.startsWith('sv:')) { const f = (window._savedCache || {})[ref.slice(3)]; if (f) { base = f; servingG = null; } }
+  else if (ref.startsWith('bc:')) { const f = (window._offCache || {}).bc; if (f) { base = f; servingG = (f.servingG > 0 ? f.servingG : null); } }
+  if (!base) return;
+
+  const isDB = ref.startsWith('off:') || ref.startsWith('bc:');   // Datenbank = je 100 g → skalierbar
+  nutPer100 = isDB ? { kcal: base.kcal, protein: base.protein, carbs: base.carbs, fat: base.fat } : null;
+  nutServingG = servingG;
+  window._qtyBase = base; window._qtyIsDB = isDB;   // für skalierte erweiterte Nährwerte beim Hinzufügen
+
+  const sheet = document.createElement('div');
+  sheet.className = 'qty-overlay'; sheet.id = 'qty-overlay';
+  sheet.onclick = e => { if (e.target === sheet) closeQty(); };
+  sheet.innerHTML = `
+    <div class="qty-sheet">
+      <div class="qty-head"><h3>${escapeHtml(base.name + (base.brand ? ' (' + base.brand + ')' : ''))}</h3>
+        <button class="modal-x" onclick="closeQty()" aria-label="Schließen">✕</button></div>
+      ${isDB ? `<div class="menge-row" style="margin-bottom:12px">
+        <input id="nf-grams" class="input-field" type="number" inputmode="decimal" min="0" max="5000" value="${servingG || 100}" oninput="nutGramsRecalc()">
+        <select id="nf-unit" class="input-field" onchange="nutUnitChange()">
+          <option value="g">g</option><option value="ml">ml</option>
+          <option value="port" id="nf-unit-port" ${servingG ? '' : 'style="display:none"'}>${servingG ? 'Portion (' + Math.round(servingG) + ' g)' : 'Portion'}</option>
+        </select></div>` : ''}
+      <div class="qty-vals">
+        <div class="qv kc"><label>Kalorien</label><input id="nf-kcal" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_KCAL}" oninput="nutManualEdit()"></div>
+      </div>
+      <div class="macro-inputs">
+        <label>Eiweiß (g)<input id="nf-protein" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" oninput="nutManualEdit()"></label>
+        <label>KH (g)<input id="nf-carbs" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" oninput="nutManualEdit()"></label>
+        <label>Fett (g)<input id="nf-fat" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" oninput="nutManualEdit()"></label>
+      </div>
+      <label class="chk" style="${ref.startsWith('sv:') ? 'display:none' : ''}"><input type="checkbox" id="nf-save"> In „Meine Lebensmittel" speichern</label>
+      <input type="hidden" id="nf-name" value="${escapeHtml(base.name + (base.brand ? ' (' + base.brand + ')' : ''))}">
+      <button class="save-workout-btn" onclick="nutQtyAdd()">Hinzufügen</button>
+    </div>`;
+  root.appendChild(sheet);
+  // Werte initial füllen
+  if (isDB) nutGramsRecalc();
+  else { const set = (i, v) => { const el = document.getElementById(i); if (el) el.value = Math.round(v || 0); };
+    set('nf-kcal', base.kcal); set('nf-protein', base.protein); set('nf-carbs', base.carbs); set('nf-fat', base.fat); }
+}
+function closeQty() { document.getElementById('qty-overlay')?.remove(); nutPer100 = null; nutServingG = null; window._qtyBase = null; }
+
+// Aktueller Skalierungsfaktor des Mengen-Sheets (Datenbank: Gramm/100, sonst 1:1)
+function nutQtyFactor() {
+  if (!window._qtyIsDB) return 1;
+  const amount = parseFloat(document.getElementById('nf-grams')?.value) || 0;
+  const unit = document.getElementById('nf-unit')?.value || 'g';
+  const grams = unit === 'port' ? amount * (nutServingG || 100) : amount;
+  return grams / 100;
+}
+// Erweiterte Nährwerte aus dem Basis-Produkt skaliert übernehmen (nur bekannte Werte)
+function nutScaledExt(base, factor) {
+  const out = {};
+  EXT_KEYS.forEach(k => { if (base && base[k] != null && !isNaN(base[k])) out[k] = Math.round(base[k] * factor * 10) / 10; });
+  return out;
+}
+
+// Aus dem Mengen-Sheet hinzufügen — Sheet schließen, Suche bleibt offen (Mehrfach-Hinzufügen)
+function nutQtyAdd() {
+  let name = val('nf-name'); const kcal = nutNum('nf-kcal', NUT_MAX_KCAL);
+  if (!name) { showToast('Keine Bezeichnung', '#c46a04'); return; }
+  if (!kcal) { showToast('Bitte Kalorien angeben', '#c46a04'); return; }
+  if (name.length > NUT_MAX_NAME) name = name.slice(0, NUT_MAX_NAME);
+  const data = loadData();
+  const ext = nutScaledExt(window._qtyBase, nutQtyFactor());
+  const fields = { name, kcal, protein: nutNum('nf-protein', NUT_MAX_MACRO), carbs: nutNum('nf-carbs', NUT_MAX_MACRO), fat: nutNum('nf-fat', NUT_MAX_MACRO), ...ext };
+  data.nutrition.log.push({ id: uid('n'), date: nutDate, meal: nutModalMeal || 'snack', ...fields });
+  const save = document.getElementById('nf-save');
+  if (save && save.checked && !data.nutrition.foods.some(f => (f.name || '').toLowerCase() === name.toLowerCase())) data.nutrition.foods.push({ id: uid('f'), ...fields });
+  saveData(data);
+  closeQty();
+  if (document.getElementById('page-nutrition')?.classList.contains('active')) renderNutrition();
+  showToast('✓ ' + name + ' hinzugefügt', '#0f9d72');
+}
+
+// Kompaktes Sheet zum BEARBEITEN eines bestehenden Eintrags
+function renderFoodEditSheet(editing) {
+  const root = document.getElementById('nut-modal-root');
   root.innerHTML = `
   <div class="modal-overlay" onclick="if(event.target===this)closeFoodModal()">
-    <div class="modal-sheet" role="dialog" aria-label="Lebensmittel hinzufügen">
-      <div class="modal-head">
-        <h3>${editing ? 'Eintrag bearbeiten' : 'Hinzufügen'}</h3>
-        <button class="modal-x" onclick="closeFoodModal()" aria-label="Schließen">✕</button>
-      </div>
-      ${editing || !savedFoods.length ? '' : `
-      <div class="saved-foods-block">
-        <div class="sfb-label">Meine Lebensmittel</div>
-        <div class="sfb-row">
-          <select id="nf-saved" class="input-field" onchange="nutPickSavedSel(this.value)">
-            <option value="">— gespeichertes wählen —</option>
-            ${savedOptions}
-          </select>
-          <button type="button" class="sfb-del" id="nf-saved-del" onclick="nutDeleteSelectedFood()" aria-label="Ausgewähltes löschen" title="Ausgewähltes löschen" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          </button>
-        </div>
-      </div>
-      <div class="modal-divider"><span>oder neu eingeben</span></div>`}
+    <div class="modal-sheet" role="dialog" aria-label="Eintrag bearbeiten">
+      <div class="modal-head"><h3>Eintrag bearbeiten</h3><button class="modal-x" onclick="closeFoodModal()" aria-label="Schließen">✕</button></div>
       <div class="modal-form">
-        <label>Bezeichnung
-          <input id="nf-name" class="input-field" type="text" list="nf-foodlist" autocomplete="off" maxlength="${NUT_MAX_NAME}" oninput="nutNameSuggest()" placeholder="z. B. Haferflocken mit Milch" value="${editing ? escapeHtml(editing.name || '') : ''}">
-          <datalist id="nf-foodlist">${dataListOptions}</datalist>
-        </label>
-        <label>Kalorien (kcal)
-          <input id="nf-kcal" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_KCAL}" placeholder="0" value="${editing ? (editing.kcal ?? '') : ''}">
-        </label>
+        <label>Bezeichnung<input id="nf-name" class="input-field" type="text" maxlength="${NUT_MAX_NAME}" value="${escapeHtml(editing.name || '')}"></label>
+        <label>Kalorien (kcal)<input id="nf-kcal" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_KCAL}" value="${editing.kcal ?? ''}"></label>
         <div class="macro-inputs">
-          <label>Eiweiß (g)<input id="nf-protein" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" placeholder="0" value="${editing ? (editing.protein ?? '') : ''}"></label>
-          <label>KH (g)<input id="nf-carbs" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" placeholder="0" value="${editing ? (editing.carbs ?? '') : ''}"></label>
-          <label>Fett (g)<input id="nf-fat" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" placeholder="0" value="${editing ? (editing.fat ?? '') : ''}"></label>
+          <label>Eiweiß (g)<input id="nf-protein" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" value="${editing.protein ?? ''}"></label>
+          <label>KH (g)<input id="nf-carbs" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" value="${editing.carbs ?? ''}"></label>
+          <label>Fett (g)<input id="nf-fat" class="input-field" type="number" inputmode="decimal" min="0" max="${NUT_MAX_MACRO}" value="${editing.fat ?? ''}"></label>
         </div>
-        ${editing ? '' : `<label class="chk"><input type="checkbox" id="nf-save"> In „Meine Lebensmittel" speichern</label>`}
       </div>
       <div class="modal-actions">
-        ${editing ? `<button class="btn-ghost-danger" onclick="nutDeleteEntry('${editing.id}', true)">Löschen</button>` : ''}
-        <button class="save-workout-btn" onclick="nutSaveEntry(${editing ? `'${editing.id}'` : 'null'})">${editing ? 'Speichern' : 'Hinzufügen'}</button>
+        <button class="btn-ghost-danger" onclick="nutDeleteEntry('${editing.id}', true)">Löschen</button>
+        <button class="save-workout-btn" onclick="nutSaveEntry('${editing.id}')">Speichern</button>
       </div>
     </div>
   </div>`;
-  setTimeout(() => { const n = document.getElementById('nf-name'); if (n && !editing) n.focus(); }, 50);
 }
 
 function closeFoodModal() {
+  if (typeof nutStopScan === 'function') nutStopScan();   // evtl. laufenden Kamera-Scan beenden
   const root = document.getElementById('nut-modal-root');
   if (root) root.innerHTML = '';
-  nutModalMeal = null;
+  nutModalMeal = null; nutPer100 = null; nutServingG = null;
   document.body.classList.remove('nut-modal-open');   // Hintergrund-Scroll wieder freigeben
 }
 
@@ -2656,6 +3109,156 @@ function nutNameSuggest() {
   if (!f) return;
   const set = (i, v) => { const el = document.getElementById(i); if (el) el.value = (v ?? 0); };
   set('nf-kcal', f.kcal); set('nf-protein', f.protein); set('nf-carbs', f.carbs); set('nf-fat', f.fat);
+}
+
+// Erweiterte Nährwerte je 100 g aus den OFF-„nutriments" (nur übernehmen, wenn vorhanden)
+function offExtras(n) {
+  const out = {};
+  const map = { fiber: 'fiber_100g', sugar: 'sugars_100g', satfat: 'saturated-fat_100g', salt: 'salt_100g', sodium: 'sodium_100g' };
+  Object.keys(map).forEach(k => { const v = n[map[k]]; if (v != null && !isNaN(v)) out[k] = +v; });
+  return out;
+}
+
+// Robuster JSON-Fetch mit mehreren Versuchen (OFF-Server hakt zeitweise)
+async function offFetch(url, tries) {
+  tries = tries || 3;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 7000);
+      const r = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+      clearTimeout(to);
+      if (r.ok) { const d = await r.json(); if (d) return d; }
+    } catch (e) { /* nächster Versuch */ }
+    await new Promise(res => setTimeout(res, 600 * (i + 1)));   // Backoff (gibt Rate-Limit Zeit zur Erholung)
+  }
+  return null;
+}
+
+// ── Open Food Facts: Lebensmittel-Suche (gratis, keine Anmeldung nötig) ──
+function nutSearchOFF() {
+  clearTimeout(_offTimer);
+  const q = (document.getElementById('nf-search')?.value || '').trim();
+  const box = document.getElementById('nf-search-results');
+  if (!box) return;
+  if (q.length < 3) { nutQuickList(); return; }               // leer → gespeicherte zeigen
+  nutSelMode = false; nutSel.clear();                          // Auswahl-Modus gilt nur für die Schnellliste
+  const reqId = (window._offReq = (window._offReq || 0) + 1);   // nur letzte Suche anzeigen
+  box.innerHTML = '<div class="fs-msg">Suche…</div>';
+  _offTimer = setTimeout(async () => {
+    const url = 'https://world.openfoodfacts.org/cgi/search.pl?search_terms=' + encodeURIComponent(q) +
+      '&search_simple=1&action=process&json=1&page_size=20&fields=product_name,brands,nutriments,serving_quantity';
+    const d = await offFetch(url, 3);
+    if (reqId !== window._offReq) return;                       // veraltetes Ergebnis verwerfen
+    if (!d) { box.innerHTML = '<div class="fs-msg">Datenbank gerade nicht erreichbar — bitte nochmal tippen oder „Manuell" nutzen.</div>'; return; }
+    const items = (d.products || []).filter(p => p.product_name && p.nutriments && p.nutriments['energy-kcal_100g'] != null);
+    if (!items.length) { box.innerHTML = '<div class="fs-msg">Nichts gefunden — trage es über „Manuell" ein.</div>'; return; }
+    window._offCache = {};
+    box.innerHTML = items.slice(0, 18).map((p, i) => {
+      const n = p.nutriments; const id = 'off' + i;
+      const servingG = parseFloat(p.serving_quantity) || null;
+      window._offCache[id] = { name: p.product_name, brand: (p.brands || '').split(',')[0].trim(),
+        kcal: Math.round(n['energy-kcal_100g'] || 0), protein: +n.proteins_100g || 0, carbs: +n.carbohydrates_100g || 0, fat: +n.fat_100g || 0,
+        servingG, ...offExtras(n) };
+      const f = window._offCache[id];
+      const sub = (f.brand ? f.brand + ' · ' : '') + (servingG ? '1 Portion (' + Math.round(servingG) + ' g)' : 'pro 100 g');
+      const kcalShown = servingG ? Math.round(f.kcal * servingG / 100) : f.kcal;
+      return foodItemHTML('off:' + id, f.name, sub, kcalShown);
+    }).join('');
+  }, 550);
+}
+
+// Datenbank-Treffer übernehmen → „je 100 g"-Referenz setzen, Menge-Feld + Einheiten zeigen
+function nutPickOFF(id) {
+  const f = (window._offCache || {})[id]; if (!f) return;
+  nutPer100 = { kcal: f.kcal, protein: f.protein, carbs: f.carbs, fat: f.fat };
+  nutServingG = (f.servingG && f.servingG > 0) ? f.servingG : null;
+  const set = (i, v) => { const el = document.getElementById(i); if (el) el.value = v; };
+  set('nf-name', f.name + (f.brand ? ' (' + f.brand + ')' : ''));
+  const gw = document.getElementById('nf-grams-wrap'); if (gw) gw.style.display = 'block';
+  // Portion-Einheit nur anbieten, wenn die Datenbank eine Portionsgröße kennt
+  const portOpt = document.getElementById('nf-unit-port');
+  if (portOpt) { portOpt.style.display = nutServingG ? '' : 'none'; portOpt.textContent = nutServingG ? `Portion (${Math.round(nutServingG)} g)` : 'Portion'; }
+  const unitSel = document.getElementById('nf-unit'); if (unitSel) unitSel.value = 'g';
+  set('nf-grams', 100);
+  nutGramsRecalc();
+  const box = document.getElementById('nf-search-results'); if (box) box.innerHTML = '';
+  const s = document.getElementById('nf-search'); if (s) s.value = '';
+}
+
+// Einheit gewechselt → bei „Portion" sinnvolle Standardmenge (1) setzen, dann neu rechnen
+function nutUnitChange() {
+  const u = document.getElementById('nf-unit')?.value;
+  const g = document.getElementById('nf-grams');
+  if (g && u === 'port') g.value = 1;
+  else if (g && (!g.value || g.value === '1')) g.value = 100;
+  nutGramsRecalc();
+}
+
+// Menge/Einheit ändern → Gramm bestimmen → kcal/Makros aus der je-100g-Referenz neu berechnen
+function nutGramsRecalc() {
+  if (!nutPer100) return;
+  const amount = parseFloat(document.getElementById('nf-grams')?.value) || 0;
+  const unit = document.getElementById('nf-unit')?.value || 'g';
+  const grams = unit === 'port' ? amount * (nutServingG || 100) : amount;   // g/ml = 1:1, Portion × Portionsgröße
+  const fac = grams / 100;
+  const set = (i, v) => { const el = document.getElementById(i); if (el) el.value = Math.round(v * fac); };
+  set('nf-kcal', nutPer100.kcal); set('nf-protein', nutPer100.protein); set('nf-carbs', nutPer100.carbs); set('nf-fat', nutPer100.fat);
+}
+
+// Manuelles Bearbeiten eines Wertfelds hebt die Datenbank-Skalierung auf
+function nutManualEdit() { nutPer100 = null; }
+
+// ── Barcode-Scan (Web · BarcodeDetector, falls verfügbar) ──
+async function nutScanBarcode() {
+  const root = document.getElementById('nut-modal-root');
+  if (!('BarcodeDetector' in window)) {
+    showToast('Barcode-Scan klappt am besten in der App — hier bitte suchen/manuell', '#c46a04');
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showToast('Keine Kamera verfügbar', '#c46a04'); return; }
+  // Scanner-Overlay
+  const ov = document.createElement('div'); ov.className = 'scan-overlay'; ov.id = 'scan-overlay';
+  ov.innerHTML = `<div class="scan-box"><video id="scan-video" playsinline></video><div class="scan-line"></div></div>
+    <p class="scan-hint">Barcode in den Rahmen halten…</p>
+    <button class="scan-cancel" onclick="nutStopScan()">Abbrechen</button>`;
+  document.body.appendChild(ov);
+  try {
+    const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    window._scanStream = stream;
+    const vid = document.getElementById('scan-video'); vid.srcObject = stream; await vid.play();
+    window._scanLoop = setInterval(async () => {
+      try {
+        const codes = await detector.detect(vid);
+        if (codes && codes.length) { const code = codes[0].rawValue; nutStopScan(); nutLookupBarcode(code); }
+      } catch (e) {}
+    }, 500);
+  } catch (e) {
+    nutStopScan();
+    showToast('Kamera-Zugriff abgelehnt', '#c0392b');
+  }
+}
+function nutStopScan() {
+  clearInterval(window._scanLoop);
+  if (window._scanStream) { window._scanStream.getTracks().forEach(t => t.stop()); window._scanStream = null; }
+  document.getElementById('scan-overlay')?.remove();
+}
+async function nutLookupBarcode(code) {
+  showToast('Barcode ' + code + ' — suche Produkt…');
+  try {
+    const d = await offFetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json?fields=product_name,brands,nutriments,serving_quantity', 3);
+    const p = d && d.product;
+    if (!p || !p.nutriments || p.nutriments['energy-kcal_100g'] == null) { showToast('Produkt nicht gefunden — bitte manuell', '#c46a04'); return; }
+    const n = p.nutriments;
+    window._offCache = window._offCache || {};
+    window._offCache.bc = { name: p.product_name || ('Produkt ' + code), brand: (p.brands || '').split(',')[0].trim(),
+      kcal: Math.round(n['energy-kcal_100g'] || 0), protein: +n.proteins_100g || 0, carbs: +n.carbohydrates_100g || 0, fat: +n.fat_100g || 0,
+      servingG: parseFloat(p.serving_quantity) || null, ...offExtras(n) };
+    // Falls das Vollbild-Hinzufügen offen ist → Mengen-Sheet; sonst Modal öffnen
+    if (!document.getElementById('food-screen')) openFoodModal(nutModalMeal || 'snack');
+    nutOpenQty('bc:bc');
+    showToast('✓ ' + (p.product_name || 'Produkt') + ' gefunden', '#0f9d72');
+  } catch (e) { showToast('Keine Verbindung zur Datenbank', '#c0392b'); }
 }
 
 // Löscht das aktuell im Dropdown gewählte gespeicherte Lebensmittel
@@ -2694,8 +3297,8 @@ function nutSaveEntry(entryId) {
     }
   }
   saveData(data);
-  closeFoodModal();
   renderNutrition();
+  if (nutDetailMeal) openMealDetail(nutDetailMeal); else closeFoodModal();
   if (typeof renderDashboard === 'function' && document.getElementById('page-dashboard')?.classList.contains('active')) renderDashboard();
   showToast(entryId ? '✓ Gespeichert' : '✓ Hinzugefügt');
 }
@@ -2706,8 +3309,9 @@ function nutDeleteEntry(id, fromModal) {
   if (i < 0) return;
   data.nutrition.log.splice(i, 1);
   saveData(data);
-  if (fromModal) closeFoodModal();
   renderNutrition();
+  if (nutDetailMeal) openMealDetail(nutDetailMeal);    // Detailansicht aktualisieren
+  else if (fromModal) closeFoodModal();
   showToast('Eintrag gelöscht', '#6d5a67');
 }
 
@@ -2838,8 +3442,12 @@ const TUTORIAL_STEPS = [
     text: 'Ganz oben siehst du immer dein aktuelles Gewicht, wie viel du schon abgenommen hast und wie weit es noch bis zu deinem Ziel ist. Den Balken füllst du, indem du dich regelmäßig wiegst.' },
   { page: 'dashboard', target: '#dash-nut', title: 'Deine Kalorien heute',
     text: 'Diese Karte zeigt dir auf einen Blick, wie viele Kalorien du heute schon gegessen hast und wie viele noch übrig sind. Tippe darauf, um direkt zur Ernährung zu kommen.' },
+  { page: 'dashboard', target: '#dash-meals', title: 'Mahlzeiten-Schnellzugriff',
+    text: 'Direkt vom Start aus kommst du hier mit einem Tipp zu Frühstück, Mittagessen, Abendessen oder Snacks — du siehst sofort die heutigen Kalorien jeder Mahlzeit und kannst blitzschnell etwas eintragen.' },
   { page: 'nutrition', target: '.nut-summary', title: 'Essen & Kalorien tracken',
-    text: 'Das ist deine Ernährungs-Seite. Der Bogen zeigt deine Kalorien, darunter Eiweiß, Kohlenhydrate und Fett. Mit „+ Hinzufügen" trägst du Mahlzeiten ein, über das Zahnrad oben rechts legst du dein Tagesziel fest.' },
+    text: 'Deine Ernährungs-Seite. Der Bogen zeigt die Kalorien, darunter Eiweiß/Kohlenhydrate/Fett. Mit „+ Hinzufügen" trägst du Mahlzeiten ein — entweder per Datenbank-Suche, Barcode-Scan oder von Hand. Ganz unten siehst du deinen 7-Tage-Verlauf, über das Zahnrad oben rechts dein Tagesziel.' },
+  { page: 'nutrition', target: '#nut-meals .nm-card', title: 'Mahlzeit-Details öffnen',
+    text: 'Tippe auf eine Mahlzeit (Frühstück, Mittagessen …), um die volle Detailansicht zu sehen: alle Einträge plus genaue Nährwerte wie Zucker, Ballaststoffe, gesättigte Fettsäuren und Salz. Mit dem runden „+" rechts fügst du blitzschnell etwas hinzu.' },
   { page: 'training', target: '#routine-list .routine-card', title: 'Training & Workouts',
     text: 'Hier sind deine Trainingspläne. Tippe einen Plan an, um ein Workout zu starten — dann trägst du Gewicht, Wiederholungen und Sätze ein. Pläne kannst du frei anpassen oder neue anlegen.' },
   { page: 'history', target: '#page-history .page-header', title: 'Dein Verlauf',
