@@ -1,9 +1,9 @@
-const CACHE_NAME = 'fitness-trainer-v64';
+const CACHE_NAME = 'fitness-trainer-v65';
 const ASSETS = [
   './',
   './index.html',
-  './style.css?v=44',
-  './app.js?v=58',
+  './style.css?v=49',
+  './app.js?v=63',
   './manifest.json',
   './logo.png',
   './icon-192.png',
